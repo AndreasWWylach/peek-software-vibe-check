@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
  * @property {Severity} severity
  * @property {number | null} points — scan points (null until the snapshot carries them).
  * @property {string | null} fixSummary
+ * @property {string | null} mappedQuestion — quiz-question back-link (Q#.#), null when none.
  * @property {string[]} languages — languages/frameworks with rule variants.
  */
 
@@ -53,4 +54,13 @@ async function loadIndex() {
 export async function lookupTeardown(teardownId) {
   const map = await loadIndex();
   return map.get(teardownId);
+}
+
+/**
+ * Return every vendored teardown fact (for reverse-indexing, e.g. question→TD).
+ * @returns {Promise<TeardownFact[]>}
+ */
+export async function listTeardowns() {
+  const map = await loadIndex();
+  return [...map.values()];
 }

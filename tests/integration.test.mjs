@@ -42,6 +42,16 @@ test(
     assert.ok(teardowns.includes('TD-016'), 'expected TD-016 to fire');
     assert.ok(teardowns.includes('TD-045'), 'expected TD-045 to fire');
 
+    // Calibration overlay: the config carries quiz data, and Q1.1 maps to
+    // TD-016, which the scan found.
+    const calibration = report.calibration;
+    assert.ok(calibration, 'expected calibration when quiz data is present');
+    if (!calibration) throw new Error('missing calibration');
+    assert.equal(calibration.selfReport, 142);
+    const moment = calibration.moments.find((m) => m.questionId === 'Q1.1');
+    assert.equal(moment?.teardownId, 'TD-016');
+    assert.equal(moment?.found, true);
+
     // Both artifacts were written, and the JSON self-check already passed.
     const json = JSON.parse(await readFile(join(outDir, 'peek-report.json'), 'utf8'));
     assert.equal(json.riskScore.total, report.riskScore.total);

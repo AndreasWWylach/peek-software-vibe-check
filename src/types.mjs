@@ -104,6 +104,23 @@
  */
 
 /**
+ * A calibration moment — a quiz hotspot cross-checked against the scan.
+ * @typedef {Object} CalibrationMoment
+ * @property {string} questionId — quiz question id, e.g. "Q2.2".
+ * @property {string | null} teardownId — the mapped teardown, or null when none.
+ * @property {boolean} found — true when the scan found that teardown.
+ */
+
+/**
+ * The self-report vs. scan calibration overlay (docs §3 level 2).
+ * @typedef {Object} Calibration
+ * @property {number} selfReport — quiz total score.
+ * @property {number} scan — scan total score.
+ * @property {Array<{ pillar: Pillar; selfReport: number; scan: number }>} pillars
+ * @property {CalibrationMoment[]} moments
+ */
+
+/**
  * The complete audit report object (mirrors peek-report.schema.json).
  * @typedef {Object} Report
  * @property {number} schemaVersion
@@ -114,6 +131,7 @@
  * @property {Finding[]} findings
  * @property {SkipRecord[]} skippedProviders
  * @property {Array<{ teardownId: string; title: string; guidance: string }>} notStaticallyVerifiable
+ * @property {Calibration | undefined} calibration — self-report vs scan (when quiz data present).
  */
 
 export {};

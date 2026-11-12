@@ -21,7 +21,8 @@
       "type": "array",
       "description": "Behavioral/architectural TDs that cannot be scored statically; reported as guidance, never scored.",
       "items": { "$ref": "#/definitions/notVerifiable" }
-    }
+    },
+    "calibration": { "$ref": "#/definitions/calibration" }
   },
   "definitions": {
     "engineInfo": {
@@ -114,6 +115,37 @@
         "teardownId": { "type": "string", "pattern": "^TD-\\d+$" },
         "title": { "type": "string" },
         "guidance": { "type": "string" }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selfReport", "scan", "pillars", "moments"],
+      "properties": {
+        "selfReport": { "type": "integer", "minimum": 0, "maximum": 350 },
+        "scan": { "type": "integer", "minimum": 0, "maximum": 350 },
+        "pillars": { "type": "array", "items": { "$ref": "#/definitions/calibrationPillar" } },
+        "moments": { "type": "array", "items": { "$ref": "#/definitions/calibrationMoment" } }
+      }
+    },
+    "calibrationPillar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pillar", "selfReport", "scan"],
+      "properties": {
+        "pillar": { "$ref": "#/definitions/pillar" },
+        "selfReport": { "type": "integer", "minimum": 0 },
+        "scan": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "calibrationMoment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["questionId", "teardownId", "found"],
+      "properties": {
+        "questionId": { "type": "string" },
+        "teardownId": { "type": ["string", "null"] },
+        "found": { "type": "boolean" }
       }
     },
     "severity": { "enum": ["critical", "high", "medium", "low"] },

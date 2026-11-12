@@ -2,9 +2,12 @@
 /**
  * @fileoverview Report renderer — Markdown (human) + JSON (machine) for the audit.
  */
+import { getRiskTier, MAX_TOTAL_SCORE, PILLAR_LABELS } from './scoring.mjs';
+
 /** @typedef {import('./types.mjs').Report} Report */
 /** @typedef {import('./types.mjs').Finding} Finding */
 /** @typedef {import('./types.mjs').Tier} Tier */
+/** @typedef {import('./types.mjs').Calibration} Calibration */
 
 /** Emoji per risk tier (for the Markdown report). */
 const TIER_EMOJI = /** @type {Record<Tier, string>} */ ({ green: '🟢', amber: '🟡', red: '🔴' });
@@ -49,6 +52,9 @@ export function renderMarkdown(report) {
     lines.push(`| ${pillar.label} | ${pillar.score} | ${pillar.max} |`);
   }
   lines.push('');
+  if (report.calibration) {
+    lines.push(...renderCalibration(report.calibration));
+  }
   lines.push('## Findings');
 
   if (findings.length === 0) {
@@ -87,6 +93,41 @@ export function renderMarkdown(report) {
   lines.push('- Get It Fixed by Last Mile');
   lines.push('');
   return lines.join('\n');
+}
+
+/**
+ * Render the self-report vs. scan calibration overlay (docs §3 level 2).
+ * @param {Calibration} calibration
+ * @returns {string[]}
+ */
+function renderCalibration(calibration) {
+  /** @type {string[]} */
+  const lines = [];
+  const selfTier = getRiskTier(Math.round((calibration.selfReport / MAX_TOTAL_SCORE) * 100));
+  const scanTier = getRiskTier(Math.round((calibration.scan / MAX_TOTAL_SCORE) * 100));
+
+  lines.push('## Self-Report vs. Scan');
+  lines.push(`- Self-reported: ${calibration.selfReport} / ${MAX_TOTAL_SCORE} — ${TIER_EMOJI[selfTier]} ${TIER_LABEL[selfTier]}`);
+  lines.push(`- Scan: ${calibration.scan} / ${MAX_TOTAL_SCORE} — ${TIER_EMOJI[scanTier]} ${TIER_LABEL[scanTier]}`);
+  lines.push('');
+  lines.push('| Pillar | Self-report | Scan |');
+  lines.push('| --- | ---: | ---: |');
+  for (const pillar of calibration.pillars) {
+    lines.push(`| ${PILLAR_LABELS[pillar.pillar]} | ${pillar.selfReport} | ${pillar.scan} |`);
+  }
+  lines.push('');
+  lines.push('## Calibration');
+  for (const moment of calibration.moments) {
+    if (moment.found) {
+      lines.push(`- ⚠️ ${moment.questionId} → ${moment.teardownId}: you reported this handled, but the scan found it.`);
+    } else if (moment.teardownId) {
+      lines.push(`- ✅ ${moment.questionId} → ${moment.teardownId}: not found by the scan.`);
+    } else {
+      lines.push(`- ℹ️ ${moment.questionId}: no static rule covers this question.`);
+    }
+  }
+  lines.push('');
+  return lines;
 }
 
 /**

@@ -15,6 +15,8 @@ import { semgrepProvider } from './providers/semgrep.mjs';
 import { osvProvider } from './providers/osv.mjs';
 import { dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE } from './scoring.mjs';
+import { computeCalibration } from './calibration.mjs';
+import { listTeardowns } from './catalog.mjs';
 import { renderMarkdown } from './report.mjs';
 import { createValidator, loadSchema, validate } from './schema-loader.mjs';
 import { ENGINE_NAME, ENGINE_VERSION, readCommit } from './version.mjs';
@@ -50,6 +52,15 @@ export async function run(configPath, options) {
   const scores = computeScores(sorted);
 
   const { total, max, tier, riskPercentage } = scores;
+  const teardownFacts = await listTeardowns();
+  const calibration = computeCalibration({
+    quiz: config.quiz,
+    scanTotal: total,
+    scanPillars: scores.pillars,
+    findings: sorted,
+    teardownFacts,
+  });
+
   const report = /** @type {Report} */ ({
     schemaVersion: 1,
     engine: { name: ENGINE_NAME, version: ENGINE_VERSION, commit: readCommit() },
@@ -59,6 +70,7 @@ export async function run(configPath, options) {
     findings: sorted,
     skippedProviders: skipped,
     notStaticallyVerifiable: [],
+    ...(calibration ? { calibration } : {}),
   });
 
   // Self-check: the engine's own output must satisfy the published contract.

@@ -3,5 +3,10 @@
   "engine": ">=0.1.0",
   "targets": ["src/"],
   "languages": ["typescript"],
-  "enabledRules": ["TD-016", "TD-045"]
+  "enabledRules": ["TD-016", "TD-045"],
+  "quiz": {
+    "totalScore": 142,
+    "hotspots": ["Q1.1", "Q2.2"],
+    "pillarBreakdown": { "security": 34 }
+  }
 }

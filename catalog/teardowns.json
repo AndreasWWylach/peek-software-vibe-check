@@ -8,6 +8,7 @@
       "severity": "critical",
       "points": null,
       "fixSummary": "Require auth, rate-limit per user, cap max_tokens, truncate input, use the cheapest model that fits the job, and set a provider-level spend alert.",
+      "mappedQuestion": "Q2.2",
       "languages": ["typescript", "javascript", "python"]
     },
     {
@@ -16,6 +17,7 @@
       "severity": "critical",
       "points": null,
       "fixSummary": "Scope every query to the authenticated tenant via a compound (id + organizationId) key — and return 404 for cross-tenant lookups so the resource's existence isn't leaked.",
+      "mappedQuestion": "Q1.3",
       "languages": ["typescript", "javascript", "python", "php"]
     },
     {
@@ -24,6 +26,7 @@
       "severity": "critical",
       "points": null,
       "fixSummary": "Move the secret to the server: create the PaymentIntent in a route handler using a server-only environment variable, and have the client call that endpoint — never ship the SDK or the key to the browser.",
+      "mappedQuestion": "Q1.1",
       "languages": ["typescript", "javascript", "python", "php"]
     },
     {
@@ -32,6 +35,7 @@
       "severity": "critical",
       "points": null,
       "fixSummary": "Register on wp_ajax_ (logged-in only), verify a nonce with check_ajax_referer(), authorize with current_user_can(), and take the identity from the session — never from the request body.",
+      "mappedQuestion": null,
       "languages": ["typescript", "javascript", "python", "php"]
     },
     {
@@ -40,6 +44,7 @@
       "severity": "critical",
       "points": null,
       "fixSummary": "Pass the raw value as a %s placeholder argument — the escaping happens inside prepare(), not in the string. Never concatenate input before preparing.",
+      "mappedQuestion": null,
       "languages": ["typescript", "javascript", "python", "php"]
     },
     {
@@ -48,6 +53,7 @@
       "severity": "critical",
       "points": null,
       "fixSummary": "Use execFile()/spawn() with an argument array — no shell, no metacharacter interpretation — and validate the filename against an allowlist before it reaches the command.",
+      "mappedQuestion": null,
       "languages": ["typescript", "javascript", "python", "php"]
     },
     {
@@ -56,6 +62,7 @@
       "severity": "medium",
       "points": null,
       "fixSummary": "Define the provider's contract with a runtime schema (Zod) instead of any/@ts-ignore — a shape change then fails loudly at the boundary, not silently downstream.",
+      "mappedQuestion": null,
       "languages": ["typescript"]
     },
     {
@@ -64,6 +71,7 @@
       "severity": "medium",
       "points": null,
       "fixSummary": "Catch the specific, retryable exception type — log it — and raise loudly when retries are exhausted. Never bare except, never pass.",
+      "mappedQuestion": null,
       "languages": ["python"]
     }
   ]
