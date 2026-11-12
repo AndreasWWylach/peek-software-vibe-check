@@ -1,0 +1,21 @@
+rules:
+  - id: peek-td-042-command-injection-php
+    languages:
+      - php
+    severity: ERROR
+    message: Command built from user input passed to shell_exec/system — shell metacharacters are interpreted.
+    metadata:
+      peek:
+        teardownId: TD-042
+        pillar: security
+        severity: critical
+        title: Command injection
+        fixSummary: Avoid shell commands with user input; validate against an allowlist.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'shell_exec($CMD)'
+          - pattern: 'system($CMD)'
+      - metavariable-regex:
+          metavariable: $CMD
+          regex: '.*\$[A-Za-z_].*'

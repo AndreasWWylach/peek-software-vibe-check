@@ -1,0 +1,21 @@
+rules:
+  - id: peek-td-046-bare-except-pass-python
+    languages:
+      - python
+    severity: WARNING
+    message: Bare `except` that silently passes — swallows every error, including ones that should fail loudly.
+    metadata:
+      peek:
+        teardownId: TD-046
+        pillar: runtime
+        severity: medium
+        title: Bare except that passes
+        fixSummary: Catch the specific exception type, log it, and raise loudly when retries are exhausted.
+      category: runtime
+    pattern: |
+      try:
+        ...
+      except:
+        ...
+        pass
+        ...

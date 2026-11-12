@@ -1,0 +1,19 @@
+rules:
+  - id: peek-td-008-idor-unscoped-lookup-python
+    languages:
+      - python
+    severity: ERROR
+    message: Lookup by raw id via a single-id accessor — no tenant/user scope (IDOR).
+    metadata:
+      peek:
+        teardownId: TD-008
+        pillar: security
+        severity: critical
+        title: Lookup by raw id without tenant scope
+        fixSummary: Scope every query to the authenticated tenant.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '$SESSION.get($MODEL, $ID)'
+          - pattern: '$QUERY.filter_by(id=$ID)'
+          - pattern: '$MODEL.objects.get(id=$ID)'

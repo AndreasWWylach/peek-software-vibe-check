@@ -1,0 +1,17 @@
+rules:
+  - id: peek-td-002-unbounded-llm-tokens-python
+    languages:
+      - python
+    severity: ERROR
+    message: LLM call without a max_tokens cap — output is unbounded and spend is unconstrained.
+    metadata:
+      peek:
+        teardownId: TD-002
+        pillar: runtime
+        severity: critical
+        title: LLM call without a token cap
+        fixSummary: Cap max_tokens, require auth, and rate-limit per user.
+      category: runtime
+    patterns:
+      - pattern: '$CLIENT.chat.completions.create(...)'
+      - pattern-not: '$CLIENT.chat.completions.create(..., max_tokens=$CAP, ...)'

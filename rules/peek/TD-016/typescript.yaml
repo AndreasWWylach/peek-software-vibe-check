@@ -1,5 +1,5 @@
 rules:
-  - id: peek-td-016-hardcoded-secret
+  - id: peek-td-016-hardcoded-secret-typescript
     languages:
       - typescript
       - javascript

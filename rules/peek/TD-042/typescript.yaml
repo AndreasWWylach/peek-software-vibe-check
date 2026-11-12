@@ -1,5 +1,5 @@
 rules:
-  - id: peek-td-042-command-injection
+  - id: peek-td-042-command-injection-typescript
     languages:
       - typescript
       - javascript

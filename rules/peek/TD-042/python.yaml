@@ -1,0 +1,23 @@
+rules:
+  - id: peek-td-042-command-injection-python
+    languages:
+      - python
+    severity: ERROR
+    message: Command built from user input passed to subprocess/os.system — shell metacharacters are interpreted.
+    metadata:
+      peek:
+        teardownId: TD-042
+        pillar: security
+        severity: critical
+        title: Command injection
+        fixSummary: Use an argument list (no shell) and validate input against an allowlist.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'os.system($CMD)'
+          - pattern: 'subprocess.call($CMD, shell=True)'
+          - pattern: 'subprocess.run($CMD, shell=True)'
+          - pattern: 'subprocess.Popen($CMD, shell=True)'
+      - metavariable-regex:
+          metavariable: $CMD
+          regex: '(.*\{.*|.*\+.*|.*request\..*|.*input\(.*)'

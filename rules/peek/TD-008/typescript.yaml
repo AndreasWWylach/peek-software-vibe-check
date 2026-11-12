@@ -1,5 +1,5 @@
 rules:
-  - id: peek-td-008-idor-unscoped-lookup
+  - id: peek-td-008-idor-unscoped-lookup-typescript
     languages:
       - typescript
       - javascript

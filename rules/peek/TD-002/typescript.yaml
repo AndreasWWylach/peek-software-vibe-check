@@ -1,5 +1,5 @@
 rules:
-  - id: peek-td-002-unbounded-llm-tokens
+  - id: peek-td-002-unbounded-llm-tokens-typescript
     languages:
       - typescript
       - javascript

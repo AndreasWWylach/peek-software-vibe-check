@@ -1,5 +1,5 @@
 rules:
-  - id: peek-td-045-ts-escape-hatch
+  - id: peek-td-045-ts-escape-hatch-typescript
     languages:
       - typescript
     severity: WARNING

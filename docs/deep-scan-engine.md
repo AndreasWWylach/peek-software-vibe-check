@@ -285,8 +285,8 @@ A rule is a **`(TD × language)` matrix cell**, not one pattern. v1 coverage ord
 | TD-032 | unauthenticated request handler | Express / Next | Flask / FastAPI | Laravel / Symfony | security |
 | TD-033 | string-concatenated SQL | template strings | f-string / `%` | concat | security |
 | TD-042 | command injection | `exec` / `spawn` | `subprocess` / `os.system` | `shell_exec` / `system` | security |
-| TD-045 | `ts-ignore` / `any` escape hatch | TS only | — | — | qa |
-| TD-046 | bare `except: pass` | — | Python only | — | qa |
+| TD-045 | `ts-ignore` / `any` escape hatch | TS only | — | — | architecture |
+| TD-046 | bare `except: pass` | — | Python only | — | runtime |
 
 ### 7.2 Detectability split (full catalog, 40 TDs)
 
@@ -372,7 +372,7 @@ No rule ships until both assertions pass. This is what prevents the scanner from
 - [x] **Naming & repo** — `peek-software-vibe-check` (repo/folder) · `vibe-check` (CLI + npm). Standalone repo under the personal GitHub account.
 - [x] **OSV transport** — shell out to the local `osv-scanner` binary (multi-ecosystem lockfile parsing for free, incl. go/rust/ruby/jvm; `osv.js` stays backend-only for the quiz intake).
 - [x] **Config schema format** — JSON Schema (language-agnostic, self-describing published contract; validated with `ajv` in the engine; Zod stays an internal Peek-backend concern).
-- [x] **Hygiene tool** — no dedicated dead-code tool in v1 (Knip is JS-only and adds uncertainty). The QA pillar gets its signal from the language linter + Semgrep QA rules (TD-045/046/022). Revisit after real reports.
+- [x] **Hygiene tool** — no dedicated dead-code tool in v1 (Knip is JS-only and adds uncertainty). The QA pillar gets its signal from the language linter + Semgrep rules (TD-022 for QA; TD-045 = architecture, TD-046 = runtime). Revisit after real reports.
 - [x] **Snapshot sync mechanism** — a simple script in peek-software that regenerates `catalog/teardowns.json` from the frontend catalog (run manually / on deploy). Full CI pipeline later.
 - [x] **Publish timing** — no fixed date. Release when the analyzer is ready, usable, helpful, tested enough, and does the job (golden tests green + a self-scan of a real repo looks sane). A reputation project — quality over timeline.
 - [x] **Language coverage order** — JS/TS first (richest catalog + AI-code sweet spot), then Python, then PHP. Go/Rust/Ruby/JVM rule variants land later, after the deferred parsers flip on.

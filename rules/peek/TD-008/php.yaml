@@ -1,0 +1,21 @@
+rules:
+  - id: peek-td-008-idor-unscoped-lookup-php
+    languages:
+      - php
+    severity: ERROR
+    message: Eloquent lookup by raw id — no tenant/user scope (IDOR).
+    metadata:
+      peek:
+        teardownId: TD-008
+        pillar: security
+        severity: critical
+        title: Lookup by raw id without tenant scope
+        fixSummary: Scope every query to the authenticated tenant.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '$MODEL::find($ID)'
+          - pattern: '$MODEL::findOrFail($ID)'
+      - metavariable-regex:
+          metavariable: $MODEL
+          regex: '^[A-Za-z_][A-Za-z0-9_]*$'
