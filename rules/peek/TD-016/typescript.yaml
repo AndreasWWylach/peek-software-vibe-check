@@ -15,3 +15,24 @@ rules:
       category: security
     patterns:
       - pattern-regex: '(sk_live_[0-9A-Za-z]+|sk_test_[0-9A-Za-z]+|ghp_[0-9A-Za-z]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)'
+  - id: peek-td-016-hardcoded-fallback-secret-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Sensitive env var with a hardcoded fallback — the fallback ships a dev secret into production.
+    metadata:
+      peek:
+        teardownId: TD-016
+        pillar: security
+        severity: critical
+        title: Hardcoded fallback secret
+        fixSummary: Fail fast at startup when a required secret is missing; never fall back to a literal.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'process.env.$VAR || "$FALLBACK"'
+          - pattern: "process.env.$VAR || '$FALLBACK'"
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: '.*(SECRET|KEY|TOKEN|PASSWORD|AUTH|STRIPE|WEBHOOK).*'

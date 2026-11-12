@@ -4,18 +4,31 @@ rules:
       - typescript
       - javascript
     severity: ERROR
-    message: Prisma query scoped by a raw id only — no tenant/user scope (IDOR).
+    message: Prisma data query lacks explicit tenant scope (organizationId / tenantId / userId).
     metadata:
       peek:
         teardownId: TD-008
         pillar: security
         severity: critical
-        title: Lookup by raw id without tenant scope
-        fixSummary: Scope every query to the authenticated tenant via a compound (id + organizationId) key.
+        title: Query without tenant scope
+        fixSummary: Scope every query to the authenticated tenant via a compound key or a tenant filter.
       category: security
     patterns:
+      # Any Prisma data-access query (facet-gated to multitenant apps) must carry
+      # tenant scope. The pattern-not list enumerates the scoped forms — a
+      # compound key (id_organizationId) or an explicit tenant column filter.
       - pattern-either:
-          - pattern: '$PRISMA.$MODEL.findUnique({..., where: { id: $ID }, ...})'
-          - pattern: '$PRISMA.$MODEL.findFirst({..., where: { id: $ID }, ...})'
-          - pattern: '$PRISMA.$MODEL.update({..., where: { id: $ID }, ...})'
-          - pattern: '$PRISMA.$MODEL.delete({..., where: { id: $ID }, ...})'
+          - pattern: '$PRISMA.$MODEL.findUnique({..., where: $WHERE, ...})'
+          - pattern: '$PRISMA.$MODEL.findFirst({..., where: $WHERE, ...})'
+          - pattern: '$PRISMA.$MODEL.findMany({..., where: $WHERE, ...})'
+          - pattern: '$PRISMA.$MODEL.update({..., where: $WHERE, ...})'
+          - pattern: '$PRISMA.$MODEL.updateMany({..., where: $WHERE, ...})'
+          - pattern: '$PRISMA.$MODEL.delete({..., where: $WHERE, ...})'
+          - pattern: '$PRISMA.$MODEL.deleteMany({..., where: $WHERE, ...})'
+      - pattern-not: '$PRISMA.$MODEL.$METHOD({..., where: { organizationId: $ANY, ... }, ...})'
+      - pattern-not: '$PRISMA.$MODEL.$METHOD({..., where: { tenantId: $ANY, ... }, ...})'
+      - pattern-not: '$PRISMA.$MODEL.$METHOD({..., where: { userId: $ANY, ... }, ...})'
+      - pattern-not: '$PRISMA.$MODEL.$METHOD({..., where: { id_organizationId: $ANY, ... }, ...})'
+      - pattern-not: '$PRISMA.$MODEL.$METHOD({..., where: { id_tenantId: $ANY, ... }, ...})'
+      - pattern-not: '$PRISMA.$MODEL.$METHOD({..., where: { organization_id: $ANY, ... }, ...})'
+      - pattern-not: '$PRISMA.$MODEL.$METHOD({..., where: { tenant_id: $ANY, ... }, ...})'
