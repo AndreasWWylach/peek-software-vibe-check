@@ -20,7 +20,7 @@ import { commandAvailable } from '../src/proc.mjs';
 /** @typedef {import('../src/types.mjs').Report} Report */
 
 /** Absolute path to the checked-in sample app fixture. */
-const SAMPLE_APP = fileURLToPath(new URL('./fixtures/sample-app', import.meta.url));
+const SAMPLE_APP = fileURLToPath(new URL('../examples/sample-app', import.meta.url));
 
 const semgrepAvailable = commandAvailable('semgrep');
 

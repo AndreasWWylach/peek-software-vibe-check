@@ -73,7 +73,8 @@ src/            engine — config, scoring, providers, report
 schema/         published JSON Schema contracts (config + report)
 catalog/        vendored teardown facts snapshot
 rules/          custom Semgrep rules — one per (TD × language)
-tests/          unit tests
+examples/       sample app used by the integration test
+tests/          unit, parser, golden, and integration tests
 ```
 
 ## License

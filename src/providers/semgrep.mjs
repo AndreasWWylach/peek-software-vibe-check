@@ -79,7 +79,10 @@ export const semgrepProvider = {
     for (const file of ruleFiles) {
       args.push('--config', file);
     }
-    args.push('--json');
+    // `--no-git-ignore` makes semgrep scan exactly the targeted paths — it
+    // neither limits to git-tracked files nor skips gitignored ones, so the
+    // audit is transparent about what it scanned (no hidden omissions).
+    args.push('--json', '--no-git-ignore');
 
     for (const target of ctx.targets) {
       if (existsSync(target)) {
