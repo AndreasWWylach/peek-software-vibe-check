@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "engine": ">=0.1.0",
+  "targets": ["src/"],
+  "languages": ["typescript"],
+  "enabledRules": ["TD-016", "TD-045"]
+}

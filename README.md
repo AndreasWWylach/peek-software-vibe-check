@@ -15,7 +15,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 
 - Node.js ≥ 20
 - [semgrep](https://semgrep.dev) — custom teardown rules (core)
-- [osv-scanner](https://google.github.io/osv-scanner) — dependency CVEs (core)
+- [osv-scanner](https://google.github.io/osv-scanner) **v2** — dependency CVEs (core)
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 
@@ -43,14 +43,27 @@ This writes `AUDIT-REPORT.md` (human) and `peek-report.json` (machine) into the 
 ## Development
 
 ```bash
-npm test             # node:test — unit tests + golden rule tests
+npm test             # node:test — unit + parser + golden + integration tests
 npm run typecheck    # tsc --noEmit (JSDoc type-checked, @ts-check)
 ```
 
-Golden tests (`tests/golden.test.mjs`) run each custom Semgrep rule against its
-teardown's `vulnerableCode` (must fire) and `hardenedCode` (must stay silent).
-They are skipped when `semgrep` is not installed — install it (`pipx install semgrep`,
-or `docker run --rm -v "$PWD":/src returntocorp/semgrep semgrep ...`) to run them.
+Install the two provider binaries to run the full suite (unit + parser tests run
+without them; golden + integration tests skip when a binary is missing):
+
+```bash
+pipx install semgrep
+# osv-scanner v2 (Linux amd64):
+curl -sSL -o ~/.local/bin/osv-scanner \
+  https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_linux_amd64
+chmod +x ~/.local/bin/osv-scanner
+```
+
+- **Golden tests** (`tests/golden.test.mjs`) run each custom Semgrep rule against
+  its teardown's `vulnerableCode` (must fire) and `hardenedCode` (must stay silent).
+- **Integration test** (`tests/integration.test.mjs`) runs the full engine against
+  a checked-in sample app and asserts the report.
+- CI (`.github/workflows/ci.yml`) installs both tools and runs typecheck + tests
+  on every push.
 
 ## Layout
 

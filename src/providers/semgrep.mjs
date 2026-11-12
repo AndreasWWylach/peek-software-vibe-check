@@ -103,7 +103,7 @@ export const semgrepProvider = {
  * @param {string} repoRoot
  * @returns {Finding[]}
  */
-function parseSemgrepJson(stdout, repoRoot) {
+export function parseSemgrepJson(stdout, repoRoot) {
   const parsed = JSON.parse(stdout);
   const results = /** @type {Array<Record<string, any>>} */ (Array.isArray(parsed.results) ? parsed.results : []);
   return results.map((result) => toFinding(result, repoRoot));

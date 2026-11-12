@@ -1,0 +1,157 @@
+// @ts-check
+/**
+ * @fileoverview Unit tests for provider JSON parsers (semgrep + osv-scanner).
+ *
+ * The providers shell out to external binaries; these tests pin how their
+ * `--json` output maps into the shared finding shape — deterministically, with
+ * canned outputs, so the mapping is verified without the binaries or a network.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { parseSemgrepJson } from '../src/providers/semgrep.mjs';
+import { parseOsvJson } from '../src/providers/osv.mjs';
+
+test('semgrep: maps a result with metadata.peek into a teardown finding', () => {
+  const output = JSON.stringify({
+    results: [
+      {
+        check_id: 'rules.peek.TD-008.peek-td-008-idor-unscoped-lookup-typescript',
+        path: '/repo/src/routes/projects.ts',
+        start: { line: 11, col: 32 },
+        end: { line: 11, col: 50 },
+        extra: {
+          message: 'Prisma query scoped by a raw id only',
+          severity: 'ERROR',
+          metadata: {
+            peek: {
+              teardownId: 'TD-008',
+              pillar: 'security',
+              severity: 'critical',
+              title: 'Lookup by raw id without tenant scope',
+              fixSummary: 'Scope every query to the authenticated tenant.',
+            },
+          },
+        },
+      },
+    ],
+  });
+
+  const [finding] = parseSemgrepJson(output, '/repo');
+  assert.equal(finding.kind, 'teardown');
+  assert.equal(finding.teardownId, 'TD-008');
+  assert.equal(finding.pillar, 'security');
+  assert.equal(finding.severity, 'critical');
+  assert.equal(finding.file, 'src/routes/projects.ts');
+  assert.equal(finding.line, 11);
+  assert.equal(finding.column, 32);
+  assert.equal(finding.title, 'Lookup by raw id without tenant scope');
+  assert.equal(finding.fixSummary, 'Scope every query to the authenticated tenant.');
+  assert.equal(finding.source.provider, 'semgrep');
+});
+
+test('semgrep: falls back to semgrep severity + qa pillar when peek metadata is thin', () => {
+  const output = JSON.stringify({
+    results: [
+      {
+        check_id: 'rules.peek.TD-045.peek-td-045-ts-escape-hatch-typescript',
+        path: '/repo/src/a.ts',
+        start: { line: 2, col: 3 },
+        end: { line: 2, col: 16 },
+        extra: { message: 'ts-ignore', severity: 'WARNING', metadata: { peek: { teardownId: 'TD-045' } } },
+      },
+    ],
+  });
+
+  const [finding] = parseSemgrepJson(output, '/repo');
+  assert.equal(finding.teardownId, 'TD-045');
+  assert.equal(finding.severity, 'medium'); // WARNING → medium
+  assert.equal(finding.pillar, 'qa'); // default when peek.pillar is missing
+});
+
+test('osv: maps v2 groups (max_severity CVSS) into a dependency finding', () => {
+  const output = JSON.stringify({
+    results: [
+      {
+        source: { path: '/repo/package-lock.json', type: 'lockfile' },
+        packages: [
+          {
+            package: { name: 'lodash', version: '4.17.20', ecosystem: 'npm' },
+            groups: [
+              { ids: ['GHSA-35jh-r3h4-6jhm'], aliases: ['CVE-2021-23337'], max_severity: '8.1' },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const [finding] = parseOsvJson(output, '/repo');
+  assert.equal(finding.kind, 'dependency');
+  assert.equal(finding.pillar, 'security');
+  assert.equal(finding.severity, 'high'); // 8.1 → high
+  assert.equal(finding.file, 'package-lock.json');
+  assert.equal(finding.dependency?.package, 'lodash');
+  assert.equal(finding.dependency?.version, '4.17.20');
+  assert.deepEqual(finding.dependency?.cveIds, ['CVE-2021-23337', 'GHSA-35jh-r3h4-6jhm']);
+});
+
+test('osv: buckets a 9.x CVSS score as critical', () => {
+  const output = JSON.stringify({
+    results: [
+      {
+        source: { path: '/repo/package-lock.json', type: 'lockfile' },
+        packages: [
+          {
+            package: { name: 'x', version: '1.0.0', ecosystem: 'npm' },
+            groups: [{ ids: ['GHSA-1'], aliases: ['CVE-2026-0001'], max_severity: '9.8' }],
+          },
+        ],
+      },
+    ],
+  });
+
+  const [finding] = parseOsvJson(output, '/repo');
+  assert.equal(finding.severity, 'critical');
+});
+
+test('osv: falls back to database_specific.severity when groups are absent', () => {
+  const output = JSON.stringify({
+    results: [
+      {
+        source: { path: '/repo/requirements.txt', type: 'lockfile' },
+        packages: [
+          {
+            package: { name: 'requests', version: '2.25.0', ecosystem: 'PyPI' },
+            vulnerabilities: [
+              { id: 'CVE-2021-0000', summary: 'x', aliases: [], database_specific: { severity: 'MODERATE' } },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  const [finding] = parseOsvJson(output, '/repo');
+  assert.equal(finding.severity, 'medium');
+  assert.deepEqual(finding.dependency?.cveIds, ['CVE-2021-0000']);
+});
+
+test('osv: defaults severity to medium when the scanner reports none', () => {
+  const output = JSON.stringify({
+    results: [
+      {
+        source: { path: '/repo/requirements.txt', type: 'lockfile' },
+        packages: [
+          {
+            package: { name: 'requests', version: '2.25.0', ecosystem: 'PyPI' },
+            vulnerabilities: [{ id: 'CVE-2021-0000', summary: 'unknown severity', aliases: [] }],
+          },
+        ],
+      },
+    ],
+  });
+
+  const [finding] = parseOsvJson(output, '/repo');
+  assert.equal(finding.severity, 'medium');
+  assert.deepEqual(finding.dependency?.cveIds, ['CVE-2021-0000']);
+});

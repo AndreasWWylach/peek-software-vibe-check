@@ -2,18 +2,18 @@
 /**
  * @fileoverview OSV-Scanner provider — local dependency CVE scan.
  *
- * Shells out to the `osv-scanner` binary, which natively walks every lockfile
- * ecosystem (package-lock.json, requirements.txt, composer.lock, go.sum, …).
- * This is the only point in the engine that touches the network (public
- * OSV/ecosystem CVE lookups) — per the trust principles.
+ * Shells out to the `osv-scanner` binary (v2 CLI), which natively walks every
+ * lockfile ecosystem (package-lock.json, requirements.txt, composer.lock,
+ * go.sum, …). This is the only point in the engine that touches the network
+ * (public OSV/ecosystem CVE lookups) — per the trust principles.
  *
- * Parsing is best-effort: the JSON shape varies across osv-scanner versions.
- * Severity is bucketed from the scanner's `database_specific.severity` when
- * present, otherwise defaulted to "medium" (a conservative middle). Flag
- * tuning and `groups`-level aliasing are Phase 2 refinements.
+ * osv-scanner v2 exits NON-ZERO when it finds vulnerabilities, so stdout is
+ * captured regardless of exit status. Severity is derived from the scanner's
+ * `groups[].max_severity` CVSS score (v2), with a fallback to the
+ * `database_specific.severity` word on the detailed vulnerability entries.
  */
 import { existsSync } from 'node:fs';
-import { commandAvailable, runCommand } from '../proc.mjs';
+import { commandAvailable, runCommandCapture } from '../proc.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').ScanConfig} ScanConfig */
@@ -45,7 +45,14 @@ export const osvProvider = {
       ctx.log('  no existing targets — nothing to scan');
       return [];
     }
-    const stdout = runCommand('osv-scanner', ['--format', 'json', ...targets], { cwd: ctx.repoRoot });
+    // `--allow-no-lockfiles` keeps a lockfile-less repo a 0-finding result
+    // (not an error). osv-scanner exits non-zero when it FINDS vulns, so
+    // capture stdout regardless of exit status.
+    const { stdout } = runCommandCapture(
+      'osv-scanner',
+      ['scan', 'source', '--format', 'json', '--allow-no-lockfiles', '-r', ...targets],
+      { cwd: ctx.repoRoot },
+    );
     return parseOsvJson(stdout, ctx.repoRoot);
   },
 };
@@ -56,7 +63,7 @@ export const osvProvider = {
  * @param {string} repoRoot
  * @returns {Finding[]}
  */
-function parseOsvJson(stdout, repoRoot) {
+export function parseOsvJson(stdout, repoRoot) {
   const parsed = JSON.parse(stdout);
   const results = /** @type {Array<Record<string, any>>} */ (Array.isArray(parsed.results) ? parsed.results : []);
   /** @type {Finding[]} */
@@ -73,8 +80,9 @@ function parseOsvJson(stdout, repoRoot) {
       const name = String(pkg.package?.name ?? 'unknown');
       const version = pkg.package?.version != null ? String(pkg.package.version) : null;
       const ecosystem = pkg.package?.ecosystem != null ? String(pkg.package.ecosystem) : null;
+      const groups = /** @type {Array<Record<string, any>>} */ (Array.isArray(pkg.groups) ? pkg.groups : []);
       const vulns = /** @type {Array<Record<string, any>>} */ (Array.isArray(pkg.vulnerabilities) ? pkg.vulnerabilities : []);
-      if (vulns.length === 0) continue;
+      if (groups.length === 0 && vulns.length === 0) continue;
 
       /** @type {string[]} */
       const cveIds = [];
@@ -82,6 +90,22 @@ function parseOsvJson(stdout, repoRoot) {
       const titles = [];
       let severity = /** @type {Severity} */ ('medium');
 
+      // Preferred: osv-scanner v2 `groups` — one entry per advisory, with the
+      // numeric CVSS `max_severity`.
+      for (const group of groups) {
+        for (const id of /** @type {any[]} */ (Array.isArray(group.ids) ? group.ids : [])) {
+          if (typeof id === 'string') cveIds.push(id);
+        }
+        for (const alias of /** @type {any[]} */ (Array.isArray(group.aliases) ? group.aliases : [])) {
+          if (typeof alias === 'string') cveIds.push(alias);
+        }
+        if (typeof group.max_severity === 'string') {
+          const score = Number.parseFloat(group.max_severity);
+          if (!Number.isNaN(score)) severity = maxSeverity(severity, cvssToSeverity(score));
+        }
+      }
+
+      // Fallback: detailed `vulnerabilities` entries (v1 / additional detail).
       for (const vuln of vulns) {
         const id = String(vuln.id ?? '');
         if (id) cveIds.push(id);
@@ -107,7 +131,7 @@ function parseOsvJson(stdout, repoRoot) {
         pillar: 'security',
         teardownId: null,
         title: titles[0] ?? uniqueCves[0] ?? `Vulnerable dependency ${name}`,
-        message: titles.length > 1 ? `${titles.length} known vulnerabilities` : null,
+        message: uniqueCves.length > 0 ? `${uniqueCves.length} known advisories` : null,
         fixSummary: version ? `Upgrade ${name} beyond ${version}` : `Upgrade ${name}`,
         source: { provider: 'osv', ruleId: uniqueCves[0] ?? null },
         dependency: { package: name, version, ecosystem, cveIds: uniqueCves },
@@ -116,6 +140,18 @@ function parseOsvJson(stdout, repoRoot) {
   }
 
   return findings;
+}
+
+/**
+ * Bucket a CVSS base score into the shared severity enum.
+ * @param {number} score — 0.0–10.0.
+ * @returns {Severity}
+ */
+function cvssToSeverity(score) {
+  if (score >= 9) return 'critical';
+  if (score >= 7) return 'high';
+  if (score >= 4) return 'medium';
+  return 'low';
 }
 
 /**

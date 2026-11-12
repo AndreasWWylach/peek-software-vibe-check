@@ -40,3 +40,24 @@ export function runCommand(command, args, options = {}) {
     throw new Error(`\`${command} ${args.join(' ')}\` failed: ${message}${stderr ? `\n${stderr}` : ''}`);
   }
 }
+
+/**
+ * Run an external command and return its stdout + exit status WITHOUT throwing
+ * on a non-zero exit (some tools exit non-zero to signal "findings found").
+ * @param {string} command — binary name.
+ * @param {string[]} args — arguments.
+ * @param {{ cwd?: string }} [options]
+ * @returns {{ status: number; stdout: string }}
+ * @throws {Error} only when the binary cannot be spawned at all (e.g. ENOENT).
+ */
+export function runCommandCapture(command, args, options = {}) {
+  const result = spawnSync(command, args, {
+    encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
+    ...options,
+  });
+  if (result.error) {
+    throw new Error(`\`${command}\` could not be run: ${result.error.message}`);
+  }
+  return { status: result.status ?? 0, stdout: String(result.stdout ?? '') };
+}
