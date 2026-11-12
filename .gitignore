@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Engine output artifacts (generated at scan time, never committed)
+peek-report.json
+AUDIT-REPORT.md
+
+# Logs + OS cruft
+*.log
+.DS_Store
+
+# Coverage / temp
+coverage/
+.tmp/

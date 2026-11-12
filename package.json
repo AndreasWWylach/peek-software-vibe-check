@@ -1,0 +1,46 @@
+{
+  "name": "vibe-check",
+  "version": "0.1.0",
+  "description": "Open-source, local deep-scan engine that turns Peek's teardown catalog into an executable audit of your codebase.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "vibe-check": "bin/vibe-check.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "schema",
+    "catalog",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/vibe-check.mjs",
+    "test": "node --test tests/",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AndreasWWylach/peek-software-vibe-check.git"
+  },
+  "keywords": [
+    "security",
+    "static-analysis",
+    "code-audit",
+    "semgrep",
+    "osv-scanner",
+    "supply-chain",
+    "peek"
+  ],
+  "dependencies": {
+    "ajv": "^8.17.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.6",
+    "typescript": "^5.6.3"
+  }
+}

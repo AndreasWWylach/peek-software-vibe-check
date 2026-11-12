@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://peek.software/schemas/peek-config.schema.json",
+  "title": "peek-config.json",
+  "description": "Inert, declarative scan configuration emitted by peek.software. Data only — never executed code. Schema-validated by the vibe-check engine; malformed config fails loudly.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "engine", "targets", "enabledRules"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "type": "integer", "const": 1 },
+    "engine": {
+      "type": "string",
+      "description": "Minimum supported engine version (semver range, e.g. \">=0.1.0\").",
+      "pattern": "^>=?\\d+\\.\\d+\\.\\d+$"
+    },
+    "targets": {
+      "type": "array",
+      "description": "Paths to scan, relative to the repo root.",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "languages": {
+      "type": "array",
+      "description": "Detected languages/frameworks (may be empty; used to gate rule variants).",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "default": []
+    },
+    "enabledRules": {
+      "type": "array",
+      "description": "Facet-gated teardown ids to activate.",
+      "items": { "type": "string", "pattern": "^TD-\\d+$" },
+      "uniqueItems": true,
+      "default": []
+    },
+    "ruleParams": {
+      "type": "object",
+      "description": "Reserved for v2 parameterized rules.",
+      "default": {}
+    },
+    "scoring": {
+      "type": "object",
+      "description": "Pillar weights (multipliers). v1 applies uniform weights; see docs §3.",
+      "additionalProperties": false,
+      "default": {},
+      "properties": {
+        "weights": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "security": { "type": "number", "minimum": 0 },
+            "runtime": { "type": "number", "minimum": 0 },
+            "architecture": { "type": "number", "minimum": 0 },
+            "qa": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "quiz": {
+      "type": "object",
+      "description": "Optional quiz calibration data (v2 overlay).",
+      "additionalProperties": true
+    }
+  }
+}

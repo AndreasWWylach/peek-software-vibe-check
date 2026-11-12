@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://peek.software/schemas/peek-report.schema.json",
+  "title": "peek-report.json",
+  "description": "Machine-readable audit report emitted by the vibe-check engine. Findings carry enough detail for an agent to act on them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "engine", "generatedAt", "riskScore", "pillars", "findings", "skippedProviders"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "engine": { "$ref": "#/definitions/engineInfo" },
+    "generatedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "riskScore": { "$ref": "#/definitions/riskScore" },
+    "pillars": { "type": "array", "items": { "$ref": "#/definitions/pillarScore" } },
+    "findings": { "type": "array", "items": { "$ref": "#/definitions/finding" } },
+    "skippedProviders": { "type": "array", "items": { "$ref": "#/definitions/skippedProvider" } },
+    "notStaticallyVerifiable": {
+      "type": "array",
+      "description": "Behavioral/architectural TDs that cannot be scored statically; reported as guidance, never scored.",
+      "items": { "$ref": "#/definitions/notVerifiable" }
+    }
+  },
+  "definitions": {
+    "engineInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "commit"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "commit": { "type": ["string", "null"] }
+      }
+    },
+    "riskScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "max", "tier", "riskPercentage"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0, "maximum": 350 },
+        "max": { "type": "integer", "const": 350 },
+        "tier": { "$ref": "#/definitions/tier" },
+        "riskPercentage": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "pillarScore": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pillar", "label", "score", "max"],
+      "properties": {
+        "pillar": { "$ref": "#/definitions/pillar" },
+        "label": { "type": "string" },
+        "score": { "type": "integer", "minimum": 0 },
+        "max": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "file", "severity", "pillar", "title", "source"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "enum": ["teardown", "dependency", "hygiene"] },
+        "file": { "type": "string" },
+        "line": { "type": ["integer", "null"], "minimum": 1 },
+        "column": { "type": ["integer", "null"], "minimum": 1 },
+        "severity": { "$ref": "#/definitions/severity" },
+        "pillar": { "$ref": "#/definitions/pillar" },
+        "teardownId": { "type": ["string", "null"], "pattern": "^TD-\\d+$" },
+        "title": { "type": "string" },
+        "message": { "type": ["string", "null"] },
+        "fixSummary": { "type": ["string", "null"] },
+        "source": { "$ref": "#/definitions/findingSource" },
+        "dependency": { "anyOf": [{ "$ref": "#/definitions/dependencyInfo" }, { "type": "null" }] }
+      }
+    },
+    "findingSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider"],
+      "properties": {
+        "provider": { "type": "string" },
+        "ruleId": { "type": ["string", "null"] }
+      }
+    },
+    "dependencyInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "cveIds"],
+      "properties": {
+        "package": { "type": "string" },
+        "version": { "type": ["string", "null"] },
+        "ecosystem": { "type": ["string", "null"] },
+        "cveIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "skippedProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "reason"],
+      "properties": {
+        "id": { "type": "string" },
+        "reason": { "enum": ["not-installed", "not-applicable", "error"] },
+        "detail": { "type": ["string", "null"] }
+      }
+    },
+    "notVerifiable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["teardownId", "title", "guidance"],
+      "properties": {
+        "teardownId": { "type": "string", "pattern": "^TD-\\d+$" },
+        "title": { "type": "string" },
+        "guidance": { "type": "string" }
+      }
+    },
+    "severity": { "enum": ["critical", "high", "medium", "low"] },
+    "pillar": { "enum": ["security", "runtime", "architecture", "qa"] },
+    "tier": { "enum": ["green", "amber", "red"] }
+  }
+}
