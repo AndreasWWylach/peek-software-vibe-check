@@ -1,0 +1,19 @@
+rules:
+  - id: peek-td-033-concatenated-sql-php
+    languages:
+      - php
+    severity: ERROR
+    message: prepare() called with an already-assembled SQL variable — concatenate input as %s placeholders, not in the string.
+    metadata:
+      peek:
+        teardownId: TD-033
+        pillar: security
+        severity: critical
+        title: String-concatenated SQL
+        fixSummary: Pass the raw value as a %s placeholder argument so escaping happens inside prepare().
+      category: security
+    patterns:
+      - pattern: '$wpdb->prepare($SQL)'
+      - metavariable-regex:
+          metavariable: $SQL
+          regex: '^\$'

@@ -1,0 +1,19 @@
+rules:
+  - id: peek-td-032-unauthenticated-handler-php
+    languages:
+      - php
+    severity: ERROR
+    message: WordPress AJAX handler registered for unauthenticated users (wp_ajax_nopriv_).
+    metadata:
+      peek:
+        teardownId: TD-032
+        pillar: security
+        severity: critical
+        title: Unauthenticated request handler
+        fixSummary: Register on wp_ajax_ (logged-in only), verify a nonce with check_ajax_referer(), and authorize with current_user_can().
+      category: security
+    patterns:
+      - pattern: 'add_action($HOOK, $HANDLER)'
+      - metavariable-regex:
+          metavariable: $HOOK
+          regex: '.*wp_ajax_nopriv_.*'
