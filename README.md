@@ -16,6 +16,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - Node.js ≥ 20
 - [semgrep](https://semgrep.dev) — custom teardown rules (core)
 - [osv-scanner](https://google.github.io/osv-scanner) **v2** — dependency CVEs (core)
+- [madge](https://github.com/pahen/madge) — circular-dependency graph → architecture findings (core)
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 
@@ -47,11 +48,12 @@ npm test             # node:test — unit + parser + golden + integration tests
 npm run typecheck    # tsc --noEmit (JSDoc type-checked, @ts-check)
 ```
 
-Install the two provider binaries to run the full suite (unit + parser tests run
+Install the three provider binaries to run the full suite (unit + parser tests run
 without them; golden + integration tests skip when a binary is missing):
 
 ```bash
 pipx install semgrep
+npm install -g madge
 # osv-scanner v2 (Linux amd64):
 curl -sSL -o ~/.local/bin/osv-scanner \
   https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_linux_amd64

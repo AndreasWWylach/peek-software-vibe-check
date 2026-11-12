@@ -28,6 +28,10 @@ jobs:
           chmod +x "$HOME/.local/bin/osv-scanner"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # madge runs the architecture-graph provider (circular dependencies).
+      - name: Install madge
+        run: npm install -g madge
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test

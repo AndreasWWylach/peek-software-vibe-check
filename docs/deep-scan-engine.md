@@ -313,9 +313,16 @@ No rule ships until both assertions pass. This is what prevents the scanner from
 | TD-041 (prototype pollution) | CodeQL (JS) |
 | TD-014 (prompt injection) | Garak / Promptfoo (dynamic) |
 | TD-019 (monolithic file) | radon / scc / tokei (metrics) |
-| TD-021 (pattern fragmentation) | dependency-cruiser / ArchUnit / deptrac |
+| TD-021 (pattern fragmentation) | **Madge** (adopted — circular deps) |
+| TD-044 (floating promise / unhandled rejection) | **deferred to type-aware linter** — ESLint `no-floating-promises` |
 | Runtime infra (Dockerfile, root user, healthcheck) | Trivy config / hadolint |
 | Go reachable vulns | govulncheck |
+
+> **TD-044 deferred to the linter (why):** a pattern-mode Semgrep rule can't
+distinguish a call that returns a Promise (e.g. `db.insertEvent(...)`) from a
+harmless fire-and-forget call, so it would be noisy — violating
+precision-over-volume. The type-aware ESLint `no-floating-promises` rule sees
+real types and flags only genuinely-unhandled promises.
 
 ---
 

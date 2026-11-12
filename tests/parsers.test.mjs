@@ -10,6 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseSemgrepJson } from '../src/providers/semgrep.mjs';
 import { parseOsvJson } from '../src/providers/osv.mjs';
+import { parseMadgeJson } from '../src/providers/madge.mjs';
 
 test('semgrep: maps a result with metadata.peek into a teardown finding', () => {
   const output = JSON.stringify({
@@ -154,4 +155,20 @@ test('osv: defaults severity to medium when the scanner reports none', () => {
   const [finding] = parseOsvJson(output, '/repo');
   assert.equal(finding.severity, 'medium');
   assert.deepEqual(finding.dependency?.cveIds, ['CVE-2021-0000']);
+});
+
+test('madge: parses circular cycles into path arrays', () => {
+  const output = JSON.stringify([
+    ['src/a.ts', 'src/b.ts'],
+    ['src/c.ts', 'src/d.ts', 'src/e.ts'],
+  ]);
+  assert.deepEqual(parseMadgeJson(output), [
+    ['src/a.ts', 'src/b.ts'],
+    ['src/c.ts', 'src/d.ts', 'src/e.ts'],
+  ]);
+});
+
+test('madge: ignores empty and self-referential cycles', () => {
+  const output = JSON.stringify([['only.ts'], []]);
+  assert.deepEqual(parseMadgeJson(output), []);
 });

@@ -73,6 +73,15 @@
       "fixSummary": "Catch the specific, retryable exception type — log it — and raise loudly when retries are exhausted. Never bare except, never pass.",
       "mappedQuestion": null,
       "languages": ["python"]
+    },
+    {
+      "id": "TD-021",
+      "pillar": "architecture",
+      "severity": "high",
+      "points": null,
+      "fixSummary": "Establish one core API client with runtime schema validation, and make every feature reuse it — one pattern, one source of truth, one place to add auth, retries, and logging.",
+      "mappedQuestion": "Q3.1",
+      "languages": ["javascript", "typescript"]
     }
   ]
 }
