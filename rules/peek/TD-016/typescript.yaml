@@ -1,0 +1,17 @@
+rules:
+  - id: peek-td-016-hardcoded-secret
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Hardcoded API key / secret literal — ship it to the browser and anyone can read it.
+    metadata:
+      peek:
+        teardownId: TD-016
+        pillar: security
+        severity: critical
+        title: Hardcoded API key / secret
+        fixSummary: Move the secret to the server; never ship the key to the browser.
+      category: security
+    patterns:
+      - pattern-regex: '(sk_live_[0-9A-Za-z]+|sk_test_[0-9A-Za-z]+|ghp_[0-9A-Za-z]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----)'

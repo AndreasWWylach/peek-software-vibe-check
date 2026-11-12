@@ -43,9 +43,14 @@ This writes `AUDIT-REPORT.md` (human) and `peek-report.json` (machine) into the 
 ## Development
 
 ```bash
-npm test             # node:test unit tests
+npm test             # node:test — unit tests + golden rule tests
 npm run typecheck    # tsc --noEmit (JSDoc type-checked, @ts-check)
 ```
+
+Golden tests (`tests/golden.test.mjs`) run each custom Semgrep rule against its
+teardown's `vulnerableCode` (must fire) and `hardenedCode` (must stay silent).
+They are skipped when `semgrep` is not installed — install it (`pipx install semgrep`,
+or `docker run --rm -v "$PWD":/src returntocorp/semgrep semgrep ...`) to run them.
 
 ## Layout
 
@@ -54,7 +59,7 @@ bin/            CLI entry
 src/            engine — config, scoring, providers, report
 schema/         published JSON Schema contracts (config + report)
 catalog/        vendored teardown facts snapshot
-rules/          custom Semgrep rules — one per (TD × language), Phase 2
+rules/          custom Semgrep rules — one per (TD × language)
 tests/          unit tests
 ```
 

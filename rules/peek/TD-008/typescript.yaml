@@ -1,0 +1,21 @@
+rules:
+  - id: peek-td-008-idor-unscoped-lookup
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Prisma query scoped by a raw id only — no tenant/user scope (IDOR).
+    metadata:
+      peek:
+        teardownId: TD-008
+        pillar: security
+        severity: critical
+        title: Lookup by raw id without tenant scope
+        fixSummary: Scope every query to the authenticated tenant via a compound (id + organizationId) key.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '$PRISMA.$MODEL.findUnique({..., where: { id: $ID }, ...})'
+          - pattern: '$PRISMA.$MODEL.findFirst({..., where: { id: $ID }, ...})'
+          - pattern: '$PRISMA.$MODEL.update({..., where: { id: $ID }, ...})'
+          - pattern: '$PRISMA.$MODEL.delete({..., where: { id: $ID }, ...})'

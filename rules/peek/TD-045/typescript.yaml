@@ -1,0 +1,19 @@
+rules:
+  - id: peek-td-045-ts-escape-hatch
+    languages:
+      - typescript
+    severity: WARNING
+    message: TypeScript escape hatch — @ts-ignore or an `any` annotation bypasses the type checker.
+    metadata:
+      peek:
+        teardownId: TD-045
+        pillar: architecture
+        severity: medium
+        title: ts-ignore / any escape hatch
+        fixSummary: Define the contract with a runtime schema (Zod) instead of any/@ts-ignore.
+      category: architecture
+    patterns:
+      - pattern-either:
+          - pattern-regex: '//\s*@ts-(ignore|expect-error)'
+          - pattern-regex: ':\s*any\b'
+          - pattern-regex: '\bas\s+any\b'

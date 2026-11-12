@@ -1,0 +1,24 @@
+rules:
+  - id: peek-td-042-command-injection
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Command built from user input passed to exec/spawn — shell metacharacters are interpreted.
+    metadata:
+      peek:
+        teardownId: TD-042
+        pillar: security
+        severity: critical
+        title: Command injection
+        fixSummary: Use execFile()/spawn() with an argument array and validate input against an allowlist.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'exec($CMD, ...)'
+          - pattern: 'exec($CMD)'
+          - pattern: 'spawn($CMD)'
+          - pattern: 'spawn($CMD, ...)'
+      - metavariable-regex:
+          metavariable: $CMD
+          regex: '(.*\$\{.*|.*req\.(body|query|params).*|.*process\.argv.*)'
