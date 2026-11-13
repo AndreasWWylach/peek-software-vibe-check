@@ -312,7 +312,7 @@ No rule ships until both assertions pass. This is what prevents the scanner from
 | TD-033 / TD-042 (SQLi / command injection) | taint — CodeQL · Psalm · gosec · Bandit |
 | TD-041 (prototype pollution) | CodeQL (JS) |
 | TD-014 (prompt injection) | Garak / Promptfoo (dynamic) |
-| TD-019 (monolithic file) | radon / scc / tokei (metrics) |
+| TD-019 (monolithic file) | **scc** (adopted — file-size threshold, `ruleParams.maxFileLines`) |
 | TD-021 (pattern fragmentation) | **Madge** (adopted — circular deps) |
 | TD-044 (floating promise / unhandled rejection) | **deferred to type-aware linter** — ESLint `no-floating-promises` |
 | Runtime infra (Dockerfile, root user, healthcheck) | Trivy config / hadolint |

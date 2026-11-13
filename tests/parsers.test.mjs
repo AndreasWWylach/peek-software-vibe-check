@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { parseSemgrepJson } from '../src/providers/semgrep.mjs';
 import { parseOsvJson } from '../src/providers/osv.mjs';
 import { parseMadgeJson } from '../src/providers/madge.mjs';
+import { parseSccJson } from '../src/providers/scc.mjs';
 
 test('semgrep: maps a result with metadata.peek into a teardown finding', () => {
   const output = JSON.stringify({
@@ -171,4 +172,27 @@ test('madge: parses circular cycles into path arrays', () => {
 test('madge: ignores empty and self-referential cycles', () => {
   const output = JSON.stringify([['only.ts'], []]);
   assert.deepEqual(parseMadgeJson(output), []);
+});
+
+test('scc: flattens per-language groups into per-file line counts', () => {
+  const output = JSON.stringify([
+    {
+      Name: 'TypeScript',
+      Files: [
+        { Location: 'src/big.ts', Lines: 600, Code: 510 },
+        { Location: 'src/small.ts', Lines: 3, Code: 1 },
+      ],
+    },
+    { Name: 'Python', Files: [{ Location: 'app/main.py', Lines: 42, Code: 30 }] },
+  ]);
+  assert.deepEqual(parseSccJson(output), [
+    { location: 'src/big.ts', lines: 600, code: 510 },
+    { location: 'src/small.ts', lines: 3, code: 1 },
+    { location: 'app/main.py', lines: 42, code: 30 },
+  ]);
+});
+
+test('scc: tolerates empty output and missing file lists', () => {
+  assert.deepEqual(parseSccJson('[]'), []);
+  assert.deepEqual(parseSccJson(JSON.stringify([{ Name: 'Go' }])), []);
 });

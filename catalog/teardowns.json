@@ -82,6 +82,15 @@
       "fixSummary": "Establish one core API client with runtime schema validation, and make every feature reuse it — one pattern, one source of truth, one place to add auth, retries, and logging.",
       "mappedQuestion": "Q3.1",
       "languages": ["javascript", "typescript"]
+    },
+    {
+      "id": "TD-019",
+      "pillar": "architecture",
+      "severity": "high",
+      "points": null,
+      "fixSummary": "Split the feature into layers — a validation schema, a service for business logic, a repository for data access, and a thin UI — so each part is testable and replaceable on its own.",
+      "mappedQuestion": "Q3.1",
+      "languages": ["typescript", "javascript"]
     }
   ]
 }

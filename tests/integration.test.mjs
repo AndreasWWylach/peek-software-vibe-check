@@ -25,6 +25,10 @@ const SAMPLE_APP = fileURLToPath(new URL('../examples/sample-app', import.meta.u
 
 const semgrepAvailable = commandAvailable('semgrep');
 const madgeAvailable = commandAvailable('madge');
+const sccAvailable = commandAvailable('scc');
+
+/** Absolute path to the checked-in monolithic-file fixture. */
+const MONOLITH_FIXTURE = fileURLToPath(new URL('../examples/monolith-fixture', import.meta.url));
 
 /**
  * Run the engine once against the sample app.
@@ -78,5 +82,25 @@ test(
     const { report } = await runOnce();
     const circular = report.findings.filter((finding) => finding.teardownId === 'TD-021');
     assert.ok(circular.length > 0, 'expected a TD-021 circular-dependency finding');
+  },
+);
+
+test(
+  'scc provider: reports TD-019 monolithic file (over ruleParams threshold)',
+  { skip: sccAvailable ? false : 'scc not installed — integration test skipped' },
+  async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'vibe-check-'));
+    const report = /** @type {Report} */ (
+      await run(join(MONOLITH_FIXTURE, 'peek-config.json'), {
+        repoRoot: MONOLITH_FIXTURE,
+        outDir,
+        quiet: true,
+      })
+    );
+    const monolithic = report.findings.filter((finding) => finding.teardownId === 'TD-019');
+    assert.equal(monolithic.length, 1, 'expected exactly one TD-019 finding');
+    assert.equal(monolithic[0]?.file, 'src/big.ts');
+    assert.equal(monolithic[0]?.pillar, 'architecture');
+    assert.equal(monolithic[0]?.severity, 'high');
   },
 );

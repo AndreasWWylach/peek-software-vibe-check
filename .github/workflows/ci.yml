@@ -32,6 +32,15 @@ jobs:
       - name: Install madge
         run: npm install -g madge
 
+      # scc runs the file-size provider (monolithic files → TD-019).
+      - name: Install scc
+        run: |
+          curl -sSL -o /tmp/scc.tar.gz \
+            https://github.com/boyter/scc/releases/download/v3.5.0/scc_Linux_x86_64.tar.gz
+          tar -xzf /tmp/scc.tar.gz -C /tmp
+          install -m 0755 /tmp/scc "$HOME/.local/bin/scc"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
