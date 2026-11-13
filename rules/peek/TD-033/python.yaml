@@ -1,0 +1,21 @@
+rules:
+  - id: peek-td-033-concatenated-sql-python
+    languages:
+      - python
+    severity: ERROR
+    message: SQL assembled by string concatenation/formatting — pass values as placeholders, never concatenate input into the query string.
+    metadata:
+      peek:
+        teardownId: TD-033
+        pillar: security
+        severity: critical
+        title: String-concatenated SQL
+        fixSummary: Pass raw values as placeholder arguments — never concatenate or format input into the SQL string.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '$CURSOR.execute($A + $B)'
+          - pattern: '$CURSOR.execute($A % $B)'
+      - metavariable-regex:
+          metavariable: $A
+          regex: '(?i).*(select|insert|update|delete|from|where).*'

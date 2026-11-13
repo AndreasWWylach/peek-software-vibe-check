@@ -1,0 +1,23 @@
+rules:
+  - id: peek-td-033-concatenated-sql-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: SQL assembled by string concatenation — pass values as placeholders, never concatenate input into the query string.
+    metadata:
+      peek:
+        teardownId: TD-033
+        pillar: security
+        severity: critical
+        title: String-concatenated SQL
+        fixSummary: Pass raw values as placeholder arguments — never concatenate input into the SQL string.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '$DB.query($A + $B)'
+          - pattern: '$DB.execute($A + $B)'
+          - pattern: '$DB.run($A + $B)'
+      - metavariable-regex:
+          metavariable: $A
+          regex: '(?i).*(select|insert|update|delete|from|where).*'

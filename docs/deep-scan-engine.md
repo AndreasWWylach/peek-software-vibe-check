@@ -149,6 +149,14 @@ A new backend endpoint (e.g. `POST /api/generate-scan-config`) that takes quiz a
 }
 ```
 
+**Two generation modes (decided 2026-11-12):** the manifest intake alone is
+sufficient to generate a runnable config — `enabledRules` is facet-gated from the
+manifest, and the quiz only feeds the optional `quiz` block. So the quiz is
+**optional**: the intake offers "generate config & run now" (scan-only) alongside
+"continue with the quiz" (calibrated self-report overlay). The engine already
+treats `quiz` as optional — no engine change required; the generator just emits
+the `quiz` block only when answers exist.
+
 ### 5.4 Engine pipeline
 
 ```

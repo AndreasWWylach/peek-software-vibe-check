@@ -1,0 +1,22 @@
+rules:
+  - id: peek-td-032-unauthenticated-handler-python
+    languages:
+      - python
+    severity: ERROR
+    message: Identity taken from the request body — trust the authenticated session, never client-supplied ids.
+    metadata:
+      peek:
+        teardownId: TD-032
+        pillar: security
+        severity: critical
+        title: Unauthenticated request handler
+        fixSummary: Take the identity from the authenticated session — never from the request body.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'request.form[$FIELD]'
+          - pattern: 'request.args[$FIELD]'
+          - pattern: 'request.json[$FIELD]'
+      - metavariable-regex:
+          metavariable: $FIELD
+          regex: '(?i).*(user.?id|uid|owner.?id|account.?id).*'

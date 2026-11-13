@@ -1,0 +1,23 @@
+rules:
+  - id: peek-td-032-unauthenticated-handler-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Identity taken from the request body — trust the authenticated session, never client-supplied ids.
+    metadata:
+      peek:
+        teardownId: TD-032
+        pillar: security
+        severity: critical
+        title: Unauthenticated request handler
+        fixSummary: Take the identity from the authenticated session — never from the request body.
+      category: security
+    patterns:
+      - pattern: '$REQ.body.$FIELD'
+      - metavariable-regex:
+          metavariable: $REQ
+          regex: '^(req|request)$'
+      - metavariable-regex:
+          metavariable: $FIELD
+          regex: '(?i).*(user.?id|uid|owner.?id|account.?id).*'
