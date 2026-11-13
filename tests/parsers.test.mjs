@@ -12,6 +12,7 @@ import { parseSemgrepJson } from '../src/providers/semgrep.mjs';
 import { parseOsvJson } from '../src/providers/osv.mjs';
 import { parseMadgeJson } from '../src/providers/madge.mjs';
 import { parseSccJson } from '../src/providers/scc.mjs';
+import { parseGitleaksJson } from '../src/providers/gitleaks.mjs';
 
 test('semgrep: maps a result with metadata.peek into a teardown finding', () => {
   const output = JSON.stringify({
@@ -195,4 +196,27 @@ test('scc: flattens per-language groups into per-file line counts', () => {
 test('scc: tolerates empty output and missing file lists', () => {
   assert.deepEqual(parseSccJson('[]'), []);
   assert.deepEqual(parseSccJson(JSON.stringify([{ Name: 'Go' }])), []);
+});
+
+test('gitleaks: maps leaks to finding fields and drops the secret value', () => {
+  const output = JSON.stringify([
+    {
+      RuleID: 'generic-api-key',
+      Description: 'Generic API Key',
+      StartLine: 4,
+      File: '/repo/src/keys.ts',
+      Secret: 'supersecretvalue',
+      Match: 'apiKey = "supersecretvalue"',
+    },
+  ]);
+  const [leak] = parseGitleaksJson(output);
+  assert.equal(leak.ruleId, 'generic-api-key');
+  assert.equal(leak.description, 'Generic API Key');
+  assert.equal(leak.file, '/repo/src/keys.ts');
+  assert.equal(leak.line, 4);
+  assert.ok(!('secret' in leak) && !('match' in leak), 'parsed leaks must not carry the secret or match text');
+});
+
+test('gitleaks: tolerates empty output', () => {
+  assert.deepEqual(parseGitleaksJson('[]'), []);
 });

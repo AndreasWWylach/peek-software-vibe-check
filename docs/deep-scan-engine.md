@@ -307,7 +307,7 @@ No rule ships until both assertions pass. This is what prevents the scanner from
 
 | TD | Preferred provider (over Semgrep) |
 |---|---|
-| TD-016 / TD-026 (secrets) | Gitleaks |
+| TD-016 (hardcoded secrets) | **Gitleaks** (adopted — entropy + allowlists; overlaps Semgrep's prefix regex, dedup collapses) |
 | TD-037 / TD-038 / TD-039 (Python RCE/SSTI) | Bandit |
 | TD-033 / TD-042 (SQLi / command injection) | taint — CodeQL · Psalm · gosec · Bandit |
 | TD-041 (prototype pollution) | CodeQL (JS) |
@@ -323,6 +323,11 @@ distinguish a call that returns a Promise (e.g. `db.insertEvent(...)`) from a
 harmless fire-and-forget call, so it would be noisy — violating
 precision-over-volume. The type-aware ESLint `no-floating-promises` rule sees
 real types and flags only genuinely-unhandled promises.
+
+> **TD-026 is NOT a Gitleaks target:** despite the old "secrets" grouping, TD-026
+is env-inheritance — an agent dumping `process.env` (or a committed `.env`) to a
+log. That's a Semgrep pattern (`console.log(process.env)`, committed `.env`), not
+entropy-based secret scanning. Tracked as a separate rule backlog item.
 
 ---
 

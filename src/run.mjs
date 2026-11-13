@@ -15,6 +15,7 @@ import { semgrepProvider } from './providers/semgrep.mjs';
 import { osvProvider } from './providers/osv.mjs';
 import { madgeProvider } from './providers/madge.mjs';
 import { sccProvider } from './providers/scc.mjs';
+import { gitleaksProvider } from './providers/gitleaks.mjs';
 import { dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
@@ -49,7 +50,7 @@ export async function run(configPath, options) {
   /** @type {RunContext} */
   const ctx = { repoRoot: options.repoRoot, targets, log };
 
-  const { findings, skipped } = await runProviders([semgrepProvider, osvProvider, madgeProvider, sccProvider], config, ctx);
+  const { findings, skipped } = await runProviders([semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider], config, ctx);
   const sorted = sortFindings(dedupeFindings(findings));
   const scores = computeScores(sorted);
 

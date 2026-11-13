@@ -26,9 +26,13 @@ const SAMPLE_APP = fileURLToPath(new URL('../examples/sample-app', import.meta.u
 const semgrepAvailable = commandAvailable('semgrep');
 const madgeAvailable = commandAvailable('madge');
 const sccAvailable = commandAvailable('scc');
+const gitleaksAvailable = commandAvailable('gitleaks');
 
 /** Absolute path to the checked-in monolithic-file fixture. */
 const MONOLITH_FIXTURE = fileURLToPath(new URL('../examples/monolith-fixture', import.meta.url));
+
+/** Absolute path to the checked-in gitleaks (secret) fixture. */
+const GITLEAKS_FIXTURE = fileURLToPath(new URL('../examples/gitleaks-fixture', import.meta.url));
 
 /**
  * Run the engine once against the sample app.
@@ -102,5 +106,32 @@ test(
     assert.equal(monolithic[0]?.file, 'src/big.ts');
     assert.equal(monolithic[0]?.pillar, 'architecture');
     assert.equal(monolithic[0]?.severity, 'high');
+  },
+);
+
+test(
+  'gitleaks provider: reports TD-016 secret without leaking its value',
+  { skip: gitleaksAvailable ? false : 'gitleaks not installed — integration test skipped' },
+  async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'vibe-check-'));
+    const report = /** @type {Report} */ (
+      await run(join(GITLEAKS_FIXTURE, 'peek-config.json'), {
+        repoRoot: GITLEAKS_FIXTURE,
+        outDir,
+        quiet: true,
+      })
+    );
+    const secrets = report.findings.filter((finding) => finding.teardownId === 'TD-016');
+    assert.equal(secrets.length, 1, 'expected exactly one TD-016 finding');
+    assert.equal(secrets[0]?.file, 'src/keys.ts');
+    assert.equal(secrets[0]?.pillar, 'security');
+    assert.equal(secrets[0]?.severity, 'critical');
+    // Trust principle: the report is written to disk and shared — the secret
+    // value must never appear in it.
+    const serialized = JSON.stringify(report);
+    assert.ok(
+      !serialized.includes('a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4e5f6a7b8c9d0e1f2a3b4'),
+      'report must not contain the secret value',
+    );
   },
 );

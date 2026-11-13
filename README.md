@@ -18,6 +18,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [osv-scanner](https://google.github.io/osv-scanner) **v2** — dependency CVEs (core)
 - [madge](https://github.com/pahen/madge) — circular-dependency graph → architecture findings (core)
 - [scc](https://github.com/boyter/scc) — file-size metrics → monolithic-file findings (core)
+- [gitleaks](https://github.com/gitleaks/gitleaks) — secrets → hardcoded-secret findings (core)
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 
@@ -49,7 +50,7 @@ npm test             # node:test — unit + parser + golden + integration tests
 npm run typecheck    # tsc --noEmit (JSDoc type-checked, @ts-check)
 ```
 
-Install the four provider binaries to run the full suite (unit + parser tests run
+Install the five provider binaries to run the full suite (unit + parser tests run
 without them; golden + integration tests skip when a binary is missing):
 
 ```bash
@@ -60,6 +61,11 @@ curl -sSL -o /tmp/scc.tar.gz \
   https://github.com/boyter/scc/releases/download/v3.5.0/scc_Linux_x86_64.tar.gz
 tar -xzf /tmp/scc.tar.gz -C /tmp
 install -m 0755 /tmp/scc ~/.local/bin/scc
+# gitleaks (Linux amd64):
+curl -sSL -o /tmp/gitleaks.tar.gz \
+  https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+tar -xzf /tmp/gitleaks.tar.gz -C /tmp
+install -m 0755 /tmp/gitleaks ~/.local/bin/gitleaks
 # osv-scanner v2 (Linux amd64):
 curl -sSL -o ~/.local/bin/osv-scanner \
   https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_linux_amd64
