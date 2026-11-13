@@ -233,6 +233,9 @@ Two cross-cutting requirements:
 
 ### 5.8 Setup & onboarding (the installer)
 
+> **Terminology:** we call the setup experience **onboarding** — it is inviting,
+> welcoming, and reads as "come on in", not "go configure your machine".
+
 One command, two personalities — beginner and advanced meet in the middle.
 
 - **Beginner path** — guided, friendly, `y/n/skip` per missing tool; prints every command before running it; ends with a ✓/✗/⟳ summary table.

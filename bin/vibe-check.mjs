@@ -10,26 +10,35 @@
  */
 import { resolve } from 'node:path';
 import { run } from '../src/run.mjs';
+import { doctor, runOnboarding } from '../src/onboarding.mjs';
 import { ENGINE_NAME, ENGINE_VERSION } from '../src/version.mjs';
 
 const HELP = `vibe-check — open-source, local deep-scan engine for peek.software
 
 Usage:
   vibe-check run --config <path> [--out <dir>] [--quiet]
+  vibe-check doctor [--no-color]
+  vibe-check setup [--dry-run] [--yes] [--skip <tool>...] [--no-color]
   vibe-check --version
   vibe-check --help
 
 Commands:
   run          Run a scan against a peek-config.json.
+  doctor       Read-only onboarding check — what's installed, missing, or outdated.
+  setup        Interactive onboarding — install the missing tools, step by step.
 
 Options:
   --config <path>   Path to peek-config.json (required for run).
   --out <dir>       Directory for the reports (default: current directory).
-  --quiet           Suppress progress output.
+  --quiet           Suppress progress output (run only).
+  --dry-run         Print every planned install step without running anything.
+  --yes             Accept all install steps without prompting.
+  --skip <tool>     Skip a tool by id (repeatable): node semgrep osv-scanner madge scc gitleaks eslint.
+  --no-color        Plain output (no ANSI colors).
   -v, --version     Print the engine version.
   -h, --help        Print this help.`;
 
-/** @typedef {{ command: 'help' } | { command: 'version' } | { command: 'run'; config: string; out: string | null; quiet: boolean }} ParsedArgs */
+/** @typedef {{ command: 'help' } | { command: 'version' } | { command: 'run'; config: string; out: string | null; quiet: boolean } | { command: 'doctor'; color: boolean } | { command: 'setup'; yes: boolean; dryRun: boolean; skip: string[]; color: boolean }} ParsedArgs */
 
 /**
  * Parse CLI arguments (minimal, dependency-free).
@@ -43,34 +52,55 @@ function parseArgs(argv) {
   if (argv.includes('--version') || argv.includes('-v')) {
     return { command: 'version' };
   }
-  if (argv[0] !== 'run') {
-    throw new Error(`Unknown command "${argv[0]}". Run "vibe-check --help".`);
+
+  const command = argv[0];
+
+  if (command === 'doctor') {
+    return { command: 'doctor', color: !argv.includes('--no-color') };
   }
 
-  /** @type {string | null} */
-  let config = null;
-  /** @type {string | null} */
-  let out = null;
-  let quiet = false;
-
-  for (let i = 1; i < argv.length; i++) {
-    const arg = argv[i];
-    if (arg === '--config') {
-      config = argv[++i];
-    } else if (arg === '--out') {
-      out = argv[++i];
-    } else if (arg === '--quiet') {
-      quiet = true;
-    } else {
-      throw new Error(`Unknown flag "${arg}". Run "vibe-check --help".`);
+  if (command === 'setup') {
+    let yes = false;
+    let dryRun = false;
+    /** @type {string[]} */
+    const skip = [];
+    let color = true;
+    for (let i = 1; i < argv.length; i++) {
+      const arg = argv[i];
+      if (arg === '--yes') yes = true;
+      else if (arg === '--dry-run') dryRun = true;
+      else if (arg === '--no-color') color = false;
+      else if (arg === '--skip') {
+        const value = argv[++i];
+        if (!value) throw new Error('--skip requires a tool id.');
+        skip.push(...value.split(','));
+      } else if (arg === '--check') {
+        return { command: 'doctor', color };
+      } else {
+        throw new Error(`Unknown flag "${arg}". Run "vibe-check --help".`);
+      }
     }
+    return { command: 'setup', yes, dryRun, skip, color };
   }
 
-  if (!config) {
-    throw new Error('Missing required --config <path>. Run "vibe-check --help".');
+  if (command === 'run') {
+    /** @type {string | null} */
+    let config = null;
+    /** @type {string | null} */
+    let out = null;
+    let quiet = false;
+    for (let i = 1; i < argv.length; i++) {
+      const arg = argv[i];
+      if (arg === '--config') config = argv[++i];
+      else if (arg === '--out') out = argv[++i];
+      else if (arg === '--quiet') quiet = true;
+      else throw new Error(`Unknown flag "${arg}". Run "vibe-check --help".`);
+    }
+    if (!config) throw new Error('Missing required --config <path>. Run "vibe-check --help".');
+    return { command: 'run', config, out, quiet };
   }
 
-  return { command: 'run', config, out, quiet };
+  throw new Error(`Unknown command "${command}". Run "vibe-check --help".`);
 }
 
 /**
@@ -86,6 +116,14 @@ async function main() {
   }
   if (parsed.command === 'version') {
     console.log(`${ENGINE_NAME} ${ENGINE_VERSION}`);
+    return;
+  }
+  if (parsed.command === 'doctor') {
+    doctor({ color: parsed.color });
+    return;
+  }
+  if (parsed.command === 'setup') {
+    await runOnboarding({ yes: parsed.yes, dryRun: parsed.dryRun, skip: parsed.skip, color: parsed.color });
     return;
   }
 

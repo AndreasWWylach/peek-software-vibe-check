@@ -34,6 +34,29 @@ node bin/vibe-check.mjs run --config /path/to/peek-config.json
 
 This writes `AUDIT-REPORT.md` (human) and `peek-report.json` (machine) into the current directory.
 
+### Onboarding (installer)
+
+One command gets the machine ready — no two-mile setup guide. Every install is
+shown (command + source + checksum) before it runs, and is interruptible and
+idempotent:
+
+```bash
+vibe-check doctor                 # read-only: what's installed / missing / outdated
+vibe-check setup                  # interactive installer (y/n/skip per tool)
+vibe-check setup --dry-run        # print every planned step, install nothing
+vibe-check setup --yes            # non-interactive (accept everything)
+vibe-check setup --skip madge     # skip a tool
+```
+
+Or bootstrap everything from a shell (installs Node, the engine, then runs the
+onboarding):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AndreasWWylach/peek-software-vibe-check/main/setup.sh -o setup.sh
+less setup.sh   # review before running — transparency first
+bash setup.sh
+```
+
 ### CLI
 
 | Command | Description |
@@ -41,6 +64,8 @@ This writes `AUDIT-REPORT.md` (human) and `peek-report.json` (machine) into the 
 | `vibe-check run --config <path>` | Run the scan against a `peek-config.json` |
 | `vibe-check run --config <path> --out <dir>` | Write reports to `<dir>` |
 | `vibe-check run --config <path> --quiet` | Suppress progress output |
+| `vibe-check doctor` | Read-only onboarding check |
+| `vibe-check setup` | Interactive onboarding (installs the tools) |
 | `vibe-check --version` | Print the engine version |
 | `vibe-check --help` | Print help |
 
