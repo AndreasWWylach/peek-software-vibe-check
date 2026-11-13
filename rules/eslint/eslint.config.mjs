@@ -1,3 +1,6 @@
+// This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+// SPDX-License-Identifier: Apache-2.0
+
 // Flat config for vibe-check's ESLint provider.
 //
 // Core rules only — no plugins, so the provider needs no dependency beyond a

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
 # setup.sh — onboarding wrapper for vibe-check (macOS / Linux).
 #
-# Bootstraps Node ≥ 20, then installs the open-source engine (pinned release)
+# Bootstraps Node ≥ 22, then installs the open-source engine (pinned release)
 # and delegates to `vibe-check setup` for the provider tools.
 #
 # Transparency: every command this script runs is printed first. It is safe to
@@ -20,12 +23,17 @@ warn()  { printf '\033[33m!\033[0m %s\n' "$*"; }
 info "vibe-check onboarding — bootstrap"
 info "Install dir: $INSTALL_DIR"
 
-# 1. Node ≥ 20 (the engine itself).
+# 1. Node ≥ 22 (the engine itself).
 if command -v node >/dev/null 2>&1; then
   NODE_VERSION="$(node -p 'process.versions.node' 2>/dev/null || echo 0)"
+  NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  if [ "$NODE_MAJOR" -lt 22 ]; then
+    warn "Node.js $NODE_VERSION is too old — install Node ≥ 22 first: https://nodejs.org"
+    exit 1
+  fi
   ok "node $NODE_VERSION"
 else
-  warn "Node.js not found. Install Node ≥ 20 first: https://nodejs.org"
+  warn "Node.js not found. Install Node ≥ 22 first: https://nodejs.org"
   exit 1
 fi
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+// SPDX-License-Identifier: Apache-2.0
+
 // @ts-check
 /**
  * @fileoverview CLI entry point for the vibe-check engine.

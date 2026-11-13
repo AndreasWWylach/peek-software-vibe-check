@@ -26,6 +26,6 @@
 
 ## Conventions
 
-- ESM (`.mjs`), Node ≥ 20, zero runtime dependencies where possible (the orchestrator shells out to external binaries).
+- ESM (`.mjs`), Node ≥ 22, zero runtime dependencies where possible (the orchestrator shells out to external binaries).
 - Every custom Semgrep rule must ship with a golden test: its TD's `vulnerableCode` fires, `hardenedCode` stays silent.
 - Rules are organized per `(TD × language)` — see the design doc §7.

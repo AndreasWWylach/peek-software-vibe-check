@@ -1,3 +1,6 @@
+// This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+// SPDX-License-Identifier: Apache-2.0
+
 // @ts-check
 /**
  * @fileoverview Unit tests for the onboarding module (pure logic only — no
@@ -33,8 +36,8 @@ test('checkTool classifies missing / outdated / ok', () => {
   const tool = TOOLS.find((t) => t.id === 'node');
   assert.ok(tool);
   assert.equal(checkTool(tool, null).status, 'missing');
-  assert.equal(checkTool(tool, [18, 0, 0]).status, 'outdated');
-  assert.equal(checkTool(tool, [20, 0, 0]).status, 'ok');
+  assert.equal(checkTool(tool, [20, 0, 0]).status, 'outdated');
+  assert.equal(checkTool(tool, [22, 0, 0]).status, 'ok');
   assert.equal(checkTool(tool, [22, 1, 0]).version, '22.1.0');
 });
 

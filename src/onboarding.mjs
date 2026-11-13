@@ -1,3 +1,6 @@
+// This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+// SPDX-License-Identifier: Apache-2.0
+
 // @ts-check
 /**
  * @fileoverview Onboarding — the guided installer for the vibe-check engine.
@@ -59,17 +62,17 @@ export const TOOLS = [
     name: 'Node.js',
     role: 'Runs the vibe-check engine itself.',
     required: true,
-    minVersion: [20, 0, 0],
+    minVersion: [22, 0, 0],
     install: {
       kind: 'manual',
-      summary: 'Install Node.js ≥ 20 (needed before anything else runs)',
+      summary: 'Install Node.js ≥ 22 (needed before anything else runs)',
       source: 'https://nodejs.org',
       commands: {
-        brew: 'brew install node@20',
-        apt: 'curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt-get install -y nodejs',
-        dnf: 'sudo dnf module install -y nodejs:20',
+        brew: 'brew install node@22',
+        apt: 'curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs',
+        dnf: 'sudo dnf module install -y nodejs:22',
         apk: 'sudo apk add nodejs',
-        default: 'Download from https://nodejs.org (LTS ≥ 20)',
+        default: 'Download from https://nodejs.org (LTS ≥ 22)',
       },
     },
   },

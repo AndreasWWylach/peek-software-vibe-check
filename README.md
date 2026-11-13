@@ -13,7 +13,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 
 ## Prerequisites
 
-- Node.js ≥ 20
+- Node.js ≥ 22
 - [semgrep](https://semgrep.dev) — custom teardown rules (core)
 - [osv-scanner](https://google.github.io/osv-scanner) **v2** — dependency CVEs (core)
 - [madge](https://github.com/pahen/madge) — circular-dependency graph → architecture findings (core)
