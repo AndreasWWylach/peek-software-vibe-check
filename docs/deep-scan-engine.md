@@ -315,6 +315,7 @@ No rule ships until both assertions pass. This is what prevents the scanner from
 | TD-019 (monolithic file) | **scc** (adopted — file-size threshold, `ruleParams.maxFileLines`) |
 | TD-021 (pattern fragmentation) | **Madge** (adopted — circular deps) |
 | TD-044 (floating promise / unhandled rejection) | **deferred to type-aware linter** — ESLint `no-floating-promises` |
+| Language linter (QA hygiene) | **ESLint** (adopted — JS only, core rules; TypeScript + TD-044 pending typescript-eslint) |
 | Runtime infra (Dockerfile, root user, healthcheck) | Trivy config / hadolint |
 | Go reachable vulns | govulncheck |
 

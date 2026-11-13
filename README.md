@@ -19,6 +19,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [madge](https://github.com/pahen/madge) — circular-dependency graph → architecture findings (core)
 - [scc](https://github.com/boyter/scc) — file-size metrics → monolithic-file findings (core)
 - [gitleaks](https://github.com/gitleaks/gitleaks) — secrets → hardcoded-secret findings (core)
+- [eslint](https://eslint.org) **9** — language linter → QA hygiene findings (core)
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 
@@ -50,12 +51,13 @@ npm test             # node:test — unit + parser + golden + integration tests
 npm run typecheck    # tsc --noEmit (JSDoc type-checked, @ts-check)
 ```
 
-Install the five provider binaries to run the full suite (unit + parser tests run
+Install the six provider binaries to run the full suite (unit + parser tests run
 without them; golden + integration tests skip when a binary is missing):
 
 ```bash
 pipx install semgrep
 npm install -g madge
+npm install -g eslint@9
 # scc (Linux amd64):
 curl -sSL -o /tmp/scc.tar.gz \
   https://github.com/boyter/scc/releases/download/v3.5.0/scc_Linux_x86_64.tar.gz

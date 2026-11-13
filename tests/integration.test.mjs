@@ -27,12 +27,16 @@ const semgrepAvailable = commandAvailable('semgrep');
 const madgeAvailable = commandAvailable('madge');
 const sccAvailable = commandAvailable('scc');
 const gitleaksAvailable = commandAvailable('gitleaks');
+const eslintAvailable = commandAvailable('eslint');
 
 /** Absolute path to the checked-in monolithic-file fixture. */
 const MONOLITH_FIXTURE = fileURLToPath(new URL('../examples/monolith-fixture', import.meta.url));
 
 /** Absolute path to the checked-in gitleaks (secret) fixture. */
 const GITLEAKS_FIXTURE = fileURLToPath(new URL('../examples/gitleaks-fixture', import.meta.url));
+
+/** Absolute path to the checked-in eslint (lint) fixture. */
+const ESLINT_FIXTURE = fileURLToPath(new URL('../examples/eslint-fixture', import.meta.url));
 
 /**
  * Run the engine once against the sample app.
@@ -133,5 +137,29 @@ test(
       !serialized.includes('a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a1b2c3d4e5f6a7b8c9d0e1f2a3b4'),
       'report must not contain the secret value',
     );
+  },
+);
+
+test(
+  'eslint provider: reports QA hygiene findings (no-unreachable + no-unused-vars)',
+  { skip: eslintAvailable ? false : 'eslint not installed — integration test skipped' },
+  async () => {
+    const outDir = await mkdtemp(join(tmpdir(), 'vibe-check-'));
+    const report = /** @type {Report} */ (
+      await run(join(ESLINT_FIXTURE, 'peek-config.json'), {
+        repoRoot: ESLINT_FIXTURE,
+        outDir,
+        quiet: true,
+      })
+    );
+    const hygiene = report.findings.filter((finding) => finding.kind === 'hygiene');
+    assert.ok(hygiene.length >= 2, 'expected at least two hygiene findings');
+    const ruleIds = hygiene.map((finding) => finding.source.ruleId);
+    assert.ok(ruleIds.includes('no-unreachable'), 'expected no-unreachable to fire');
+    assert.ok(ruleIds.includes('no-unused-vars'), 'expected no-unused-vars to fire');
+    for (const finding of hygiene) {
+      assert.equal(finding.pillar, 'qa');
+      assert.equal(finding.teardownId, null);
+    }
   },
 );

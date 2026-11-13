@@ -13,6 +13,7 @@ import { parseOsvJson } from '../src/providers/osv.mjs';
 import { parseMadgeJson } from '../src/providers/madge.mjs';
 import { parseSccJson } from '../src/providers/scc.mjs';
 import { parseGitleaksJson } from '../src/providers/gitleaks.mjs';
+import { parseEslintJson } from '../src/providers/eslint.mjs';
 
 test('semgrep: maps a result with metadata.peek into a teardown finding', () => {
   const output = JSON.stringify({
@@ -219,4 +220,27 @@ test('gitleaks: maps leaks to finding fields and drops the secret value', () => 
 
 test('gitleaks: tolerates empty output', () => {
   assert.deepEqual(parseGitleaksJson('[]'), []);
+});
+
+test('eslint: maps messages to hygiene findings (error→medium, warn→low)', () => {
+  const output = JSON.stringify([
+    {
+      filePath: '/repo/src/app.js',
+      messages: [
+        { ruleId: 'no-unreachable', severity: 2, message: 'Unreachable code.', line: 4, column: 3 },
+        { ruleId: 'no-unused-vars', severity: 1, message: "'unused' is never used.", line: 2, column: 9 },
+      ],
+    },
+  ]);
+  assert.deepEqual(parseEslintJson(output), [
+    { file: '/repo/src/app.js', ruleId: 'no-unreachable', severity: 'medium', line: 4, column: 3, message: 'Unreachable code.' },
+    { file: '/repo/src/app.js', ruleId: 'no-unused-vars', severity: 'low', line: 2, column: 9, message: "'unused' is never used." },
+  ]);
+});
+
+test('eslint: ignores fatal messages (no ruleId) and tolerates non-JSON', () => {
+  const output = JSON.stringify([{ filePath: '/repo/src/x.ts', messages: [{ fatal: true, severity: 2, message: 'Parsing error' }] }]);
+  assert.deepEqual(parseEslintJson(output), []);
+  assert.deepEqual(parseEslintJson(''), []);
+  assert.deepEqual(parseEslintJson('not json'), []);
 });

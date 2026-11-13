@@ -50,6 +50,10 @@ jobs:
           install -m 0755 /tmp/gitleaks "$HOME/.local/bin/gitleaks"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # eslint runs the language-linter provider (QA hygiene findings).
+      - name: Install eslint
+        run: npm install -g eslint@9
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
