@@ -32,6 +32,15 @@ export function teardownPath(teardownId) {
 }
 
 /**
+ * Deep-link to the LastMile hand-off (finding IDs only — never code).
+ * @param {string[]} teardownIds — e.g. ["TD-008", "TD-016"].
+ * @returns {string} the public fix URL (peek.software redirects to Last Mile).
+ */
+export function fixPath(teardownIds) {
+  return `https://peek.software/fix?findings=${teardownIds.join(',')}`;
+}
+
+/**
  * Render the human-readable Markdown report (`AUDIT-REPORT.md`).
  * @param {Report} report
  * @returns {string}
@@ -93,7 +102,19 @@ export function renderMarkdown(report) {
 
   lines.push('');
   lines.push('## Next Steps');
-  lines.push('- Get It Fixed by Last Mile');
+  const teardownIds = [
+    ...new Set(
+      findings
+        .map((finding) => finding.teardownId)
+        .filter((id) => typeof id === 'string')
+        .map((id) => /** @type {string} */ (id)),
+    ),
+  ];
+  if (teardownIds.length > 0) {
+    lines.push(`- Get It Fixed by Last Mile → ${fixPath(teardownIds)}`);
+  } else {
+    lines.push('- Get It Fixed by Last Mile');
+  }
   lines.push('');
   return lines.join('\n');
 }
