@@ -1,0 +1,32 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-051 — Entitlement granted from a client-supplied value (PHP).
+#
+# Same shape as the TypeScript rule: an entitlement field (billing_tier /
+# plan_id / price_id / …) written straight from request data ($_POST, $_GET,
+# $_REQUEST, or Laravel's $request->input/get). The hardened shape derives the
+# tier from the provider-verified subscription, so the value never matches the
+# request-data forms.
+rules:
+  - id: peek-td-051-client-entitlement-php
+    languages:
+      - php
+    severity: ERROR
+    message: Billing entitlement granted from a client-supplied value — verify the subscription with the provider and derive the tier server-side.
+    metadata:
+      peek:
+        teardownId: TD-051
+        pillar: security
+        severity: critical
+        title: Entitlement granted from client claim
+        fixSummary: Derive the tier from the provider-verified subscription/plan and write that — never a value the client sent.
+      category: security
+    patterns:
+      - pattern-either:
+          # Plain PHP: $user['plan_id'] = $_POST['plan_id'];
+          - pattern-regex: |-
+              \$[A-Za-z_][A-Za-z0-9_]*\s*\[\s*['"](billing_tier|billingTier|plan_id|planId|price_id|priceId|entitlement|access_tier|accessTier)['"]\s*\]\s*=\s*\$_(POST|GET|REQUEST)\s*\[
+          # Laravel: 'billing_tier' => $request->input('tier')
+          - pattern-regex: |-
+              ['"](billing_tier|billingTier|plan_id|planId|price_id|priceId|entitlement|access_tier|accessTier)['"]\s*=>\s*\$[A-Za-z_][A-Za-z0-9_]*->(input|get|post)\s*\(

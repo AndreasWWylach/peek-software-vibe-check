@@ -108,7 +108,7 @@
       "points": null,
       "fixSummary": "Derive the entitlement from the provider-verified subscription/plan and write that — never a billing tier, plan id, or price id the client sent.",
       "mappedQuestion": null,
-      "languages": ["typescript", "javascript"]
+      "languages": ["typescript", "javascript", "php"]
     }
   ]
 }
