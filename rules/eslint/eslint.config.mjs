@@ -8,6 +8,25 @@
 // typescript-eslint (deferred; TD-044 `no-floating-promises` lands with it).
 export default [
   {
+    // Build output, caches, and vendored trees are not the app's own source —
+    // linting them (e.g. minified bundles) produces pure noise. `node_modules`
+    // is already ignored by ESLint's defaults; these are the rest.
+    ignores: [
+      '**/dist/**',
+      '**/build/**',
+      '**/.cache/**',
+      '**/.next/**',
+      '**/coverage/**',
+      '**/.venv/**',
+      '**/venv/**',
+      '**/__pycache__/**',
+      '**/.idea/**',
+      '**/.vscode/**',
+      '**/.turbo/**',
+      '**/vendor/**',
+    ],
+  },
+  {
     files: ['**/*.{js,mjs,cjs,jsx}'],
     rules: {
       'no-unused-vars': 'warn',
