@@ -5,7 +5,7 @@
 /**
  * @fileoverview Report renderer — Markdown (human) + JSON (machine) for the audit.
  */
-import { getRiskTier, MAX_TOTAL_SCORE, PILLAR_LABELS } from './scoring.mjs';
+import { getRiskTier, MAX_TOTAL_SCORE, PILLAR_LABELS, SEVERITY_RANK } from './scoring.mjs';
 
 /** @typedef {import('./types.mjs').Report} Report */
 /** @typedef {import('./types.mjs').Finding} Finding */
@@ -57,6 +57,7 @@ export function renderMarkdown(report) {
   lines.push(`**Date:** ${generatedAt.slice(0, 10)}`);
   lines.push(`**Engine:** ${engine.name} ${engine.version} (public, commit ${engine.commit ?? 'n/a'})`);
   lines.push('');
+  lines.push(...renderVerdict(riskScore, codeFindings, dependencies, dependencyFindings));
   lines.push('## Overall Risk');
   lines.push(`- **Your code:** ${riskScore.total} / ${riskScore.max} — ${TIER_EMOJI[riskScore.tier]} ${TIER_LABEL[riskScore.tier]}`);
   if (dependencies && dependencies.total > 0) {
@@ -151,6 +152,65 @@ export function renderMarkdown(report) {
 }
 
 /**
+ * The one-glance, plain-language verdict at the top of the report: the code
+ * score in words, the single most common code issue, and the worst dependency.
+ * @param {{ total: number; max: number; tier: import('./types.mjs').Tier }} riskScore
+ * @param {Finding[]} codeFindings
+ * @param {import('./types.mjs').DependencySummary | undefined} dependencies
+ * @param {Finding[]} dependencyFindings
+ * @returns {string[]}
+ */
+function renderVerdict(riskScore, codeFindings, dependencies, dependencyFindings) {
+  /** @type {string[]} */
+  const lines = ['## Verdict'];
+
+  const top = topCodeIssue(codeFindings);
+  lines.push(
+    `Your code scores **${riskScore.total}/${riskScore.max}** — ${TIER_LABEL[riskScore.tier]}` +
+      (top ? `; the top issue is **${top.title}** (${top.count} ${top.severity}).` : '.'),
+  );
+
+  if (dependencies && dependencies.total > 0) {
+    const worst = [...dependencyFindings].sort(
+      (a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity],
+    )[0];
+    lines.push(
+      `Your dependencies carry **${dependencies.total} known CVE(s)**` +
+        (worst
+          ? `; the worst is ${worst.severity} \`${worst.dependency?.package ?? worst.file}\` — upgrade to fix.`
+          : '.'),
+    );
+  }
+
+  lines.push('');
+  return lines;
+}
+
+/**
+ * The single most common code issue (by count, then by severity).
+ * @param {Finding[]} codeFindings
+ * @returns {{ title: string; count: number; severity: import('./types.mjs').Severity } | null}
+ */
+function topCodeIssue(codeFindings) {
+  /** @type {Map<string, { title: string; count: number; severity: import('./types.mjs').Severity }>} */
+  const groups = new Map();
+  for (const finding of codeFindings) {
+    const key = finding.teardownId ?? finding.source?.ruleId ?? finding.title;
+    const group = groups.get(key);
+    if (group) {
+      group.count += 1;
+      if (SEVERITY_RANK[finding.severity] > SEVERITY_RANK[group.severity]) group.severity = finding.severity;
+    } else {
+      groups.set(key, { title: finding.title, count: 1, severity: finding.severity });
+    }
+  }
+  if (groups.size === 0) return null;
+  return [...groups.values()].sort(
+    (a, b) => b.count - a.count || SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity],
+  )[0];
+}
+
+/**
  * Render the per-provider "Findings Summary" table rows.
  * @param {Finding[]} codeFindings
  * @param {import('./types.mjs').DependencySummary | undefined} dependencies
@@ -165,8 +225,7 @@ function renderSummary(codeFindings, dependencies) {
     if (list) list.push(finding);
     else byProvider.set(provider, [finding]);
   }
-
-  const order = ['semgrep', 'osv', 'madge', 'scc', 'gitleaks', 'eslint'];
+  const order = ['semgrep', 'gitleaks', 'madge', 'scc', 'eslint', 'osv'];
   /** @type {string[]} */
   const lines = [];
   for (const provider of order) {
@@ -224,9 +283,13 @@ function severitySpread(summary) {
  */
 function formatDependency(finding) {
   const dep = finding.dependency;
-  const cves = dep?.cveIds?.join(', ') ?? finding.source.ruleId ?? 'CVE';
+  const ids = dep?.cveIds ?? [];
+  // Long CVE lists (e.g. undici) would blow up the table cell — truncate.
+  const cves = ids.length > 3
+    ? `${ids.slice(0, 3).join(', ')} … +${ids.length - 3} more`
+    : ids.join(', ');
   const fix = finding.fixSummary ? ` ${finding.fixSummary}` : '';
-  return `| ${finding.severity} | \`${dep?.package ?? finding.file}\` | ${dep?.version ?? '?'} | ${cves} |${fix} |`;
+  return `| ${finding.severity} | \`${dep?.package ?? finding.file}\` | ${dep?.version ?? '?'} | ${cves || (finding.source.ruleId ?? 'CVE')} |${fix} |`;
 }
 
 /**
