@@ -14,8 +14,8 @@ bash setup.sh
 missing), clones the pinned engine release, installs its single runtime
 dependency, exposes `vibe-check` on your PATH, and runs the **onboarding** to
 install the provider tools (semgrep, osv-scanner, madge, scc, gitleaks, eslint).
-Everything prints before it runs, and you can interrupt at any time — re-run to
-resume.
+The **tests** signal is built into the engine — no install. Everything prints
+before it runs, and you can interrupt at any time — re-run to resume.
 
 ## 2. Get your config
 

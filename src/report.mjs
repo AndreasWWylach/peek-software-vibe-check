@@ -48,7 +48,8 @@ export function fixPath(teardownIds) {
 export function renderMarkdown(report) {
   const { engine, generatedAt, riskScore, pillars, findings, skippedProviders, notStaticallyVerifiable, dependencies } = report;
   const dependencyFindings = findings.filter((finding) => finding.kind === 'dependency');
-  const codeFindings = findings.filter((finding) => finding.kind !== 'dependency');
+  const testFindings = findings.filter((finding) => finding.inTests === true);
+  const codeFindings = findings.filter((finding) => finding.kind !== 'dependency' && !finding.inTests);
 
   /** @type {string[]} */
   const lines = [];
@@ -73,6 +74,9 @@ export function renderMarkdown(report) {
   lines.push('| Check | Findings | What |');
   lines.push('| --- | ---: | --- |');
   lines.push(...renderSummary(codeFindings, dependencies));
+  if (testFindings.length > 0) {
+    lines.push(`_${testFindings.length} finding(s) in test files are reported below and are not scored._`);
+  }
   lines.push('');
 
   lines.push('## Pillar Breakdown');
@@ -116,6 +120,22 @@ export function renderMarkdown(report) {
     }
   }
 
+  if (testFindings.length > 0) {
+    lines.push('');
+    lines.push('## Findings in test files (not scored)');
+    lines.push('_Test code is not shipped to production, so these do not affect the risk score — but a real secret committed to a test file is still public in git and worth fixing._');
+    /** @type {string | null} */
+    let currentPillar = null;
+    for (const finding of testFindings) {
+      if (finding.pillar !== currentPillar) {
+        currentPillar = finding.pillar;
+        lines.push('');
+        lines.push(`### ${finding.pillar}`);
+      }
+      lines.push(formatFinding(finding));
+    }
+  }
+
   if (skippedProviders.length > 0) {
     lines.push('');
     lines.push('## Skipped Checks');
@@ -136,7 +156,7 @@ export function renderMarkdown(report) {
   lines.push('## Next Steps');
   const teardownIds = [
     ...new Set(
-      codeFindings
+      [...codeFindings, ...testFindings]
         .map((finding) => finding.teardownId)
         .filter((id) => typeof id === 'string')
         .map((id) => /** @type {string} */ (id)),
@@ -233,7 +253,7 @@ function renderSummary(codeFindings, dependencies) {
     if (list) list.push(finding);
     else byProvider.set(provider, [finding]);
   }
-  const order = ['semgrep', 'gitleaks', 'madge', 'scc', 'eslint', 'osv'];
+  const order = ['semgrep', 'gitleaks', 'madge', 'scc', 'eslint', 'tests', 'osv'];
   /** @type {string[]} */
   const lines = [];
   for (const provider of order) {

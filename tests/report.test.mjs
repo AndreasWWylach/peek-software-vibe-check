@@ -112,3 +112,42 @@ test('renderMarkdown explains each finding with its message and fix', () => {
   assert.ok(markdown.includes('Output is unbounded and spend is unconstrained.'), markdown);
   assert.ok(markdown.includes('Fix: Cap max_tokens, require auth, and rate-limit per user.'), markdown);
 });
+
+test('renderMarkdown reports test-file findings separately and unscored', () => {
+  const report = {
+    engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
+    generatedAt: '2026-11-13T00:00:00.000Z',
+    riskScore: { total: 0, max: 350, tier: 'green', riskPercentage: 0 },
+    pillars: [],
+    findings: [
+      {
+        kind: 'teardown',
+        teardownId: 'TD-016',
+        file: 'src/app.ts',
+        line: 2,
+        severity: 'critical',
+        pillar: 'security',
+        title: 'Hardcoded secret (aws-access-token)',
+        source: { provider: 'gitleaks', ruleId: 'aws-access-token' },
+      },
+      {
+        kind: 'teardown',
+        teardownId: 'TD-016',
+        file: 'src/keys.test.ts',
+        line: 3,
+        severity: 'critical',
+        pillar: 'security',
+        title: 'Hardcoded secret (aws-access-token)',
+        source: { provider: 'gitleaks', ruleId: 'aws-access-token' },
+        inTests: true,
+      },
+    ],
+    dependencies: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+    skippedProviders: [],
+    notStaticallyVerifiable: [],
+  };
+
+  const markdown = renderMarkdown(/** @type {any} */ (report));
+  assert.ok(markdown.includes('## Findings in test files (not scored)'), markdown);
+  assert.ok(markdown.includes('keys.test.ts'), markdown);
+});

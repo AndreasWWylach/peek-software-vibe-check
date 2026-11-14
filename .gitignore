@@ -12,4 +12,6 @@ AUDIT-REPORT.md
 # Coverage / temp
 coverage/
 .tmp/
-docs/vibecoded-code-semgrep.md
+
+# Internal planning & research notes (not part of the public repo)
+internal/

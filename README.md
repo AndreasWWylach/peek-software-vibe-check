@@ -2,7 +2,7 @@
 
 Open-source, local deep-scan engine for [peek.software](https://peek.software). It turns Peek's teardown catalog into an executable audit of your codebase — running **entirely on your machine, against your own source code**.
 
-> **Status:** Phase 1 skeleton. The provider pipeline (Semgrep + OSV-Scanner) is wired end-to-end; the 8-rule golden rulepack lands in Phase 2. See `docs/deep-scan-engine.md` for the full design.
+> **Status:** Shipped — the engine scans real repos end-to-end with seven providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
 
 ## Trust statement
 
@@ -20,6 +20,8 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [scc](https://github.com/boyter/scc) — file-size metrics → monolithic-file findings (core)
 - [gitleaks](https://github.com/gitleaks/gitleaks) — secrets → hardcoded-secret findings (core)
 - [eslint](https://eslint.org) **9** — language linter → QA hygiene findings (core)
+
+The **tests** provider (test presence + assertion heuristic) is built into the engine — no binary to install.
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 

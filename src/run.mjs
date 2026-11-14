@@ -20,6 +20,8 @@ import { madgeProvider } from './providers/madge.mjs';
 import { sccProvider } from './providers/scc.mjs';
 import { gitleaksProvider } from './providers/gitleaks.mjs';
 import { eslintProvider } from './providers/eslint.mjs';
+import { testsProvider } from './providers/tests.mjs';
+import { isTestFile } from './ignore.mjs';
 import { dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
@@ -55,14 +57,27 @@ export async function run(configPath, options) {
   const ctx = { repoRoot: options.repoRoot, targets, log };
 
   const { findings, skipped } = await runProviders(
-    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider],
+    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider],
     config,
     ctx,
   );
   const sorted = sortFindings(dedupeFindings(findings));
+  // Findings inside test files are reported but NOT scored: test code is not
+  // shipped to production, yet a real key committed to a test file is still
+  // public in git — so it must be flagged without tanking the readiness score.
+  // The `tests` provider's own signal (TD-017, no-tests) stays scored.
+  for (const finding of sorted) {
+    if (
+      finding.kind !== 'dependency' &&
+      finding.source.provider !== 'tests' &&
+      isTestFile(finding.file)
+    ) {
+      finding.inTests = true;
+    }
+  }
   // Dependency CVEs score separately: "upgrade this package" is not the same
   // remediation as "rewrite this code", and the quiz has no dependency axis.
-  const codeFindings = sorted.filter((finding) => finding.kind !== 'dependency');
+  const codeFindings = sorted.filter((finding) => finding.kind !== 'dependency' && !finding.inTests);
   const scores = computeScores(codeFindings);
   const dependencies = summarizeDependencies(sorted);
 

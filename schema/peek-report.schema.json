@@ -78,7 +78,8 @@
         "message": { "type": ["string", "null"] },
         "fixSummary": { "type": ["string", "null"] },
         "source": { "$ref": "#/definitions/findingSource" },
-        "dependency": { "anyOf": [{ "$ref": "#/definitions/dependencyInfo" }, { "type": "null" }] }
+        "dependency": { "anyOf": [{ "$ref": "#/definitions/dependencyInfo" }, { "type": "null" }] },
+        "inTests": { "type": "boolean" }
       }
     },
     "findingSource": {

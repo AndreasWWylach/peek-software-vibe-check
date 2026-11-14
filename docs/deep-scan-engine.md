@@ -1,7 +1,7 @@
 # peek.software — Deep Scan Engine (Working Draft)
 
-> **Status:** DRAFT — vision + architecture, not yet implemented.
-> **Last updated:** 2026-11-11
+> **Status:** IMPLEMENTED — shipped and scanning real repos; §1–§8 are the current design, §9–§10 are historical (phases done / decisions closed).
+> **Last updated:** 2026-11-14
 > **Scope:** the open-source, local "post-diagnosis" scanner that turns Peek's teardown catalog into an executable audit.
 
 ---
@@ -102,10 +102,24 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 <repo>/                        # peek-software-vibe-check — public
 ├── bin/                       # CLI entry
 ├── src/
-│   ├── run.mjs                # orchestrator: Semgrep → OSV → hygiene → report
+│   ├── run.mjs                # orchestrator: providers → dedup → score → report
 │   ├── config.mjs             # config loader + JSON Schema validation (ajv)
 │   ├── scoring.mjs            # pillar weights, severity→points, tier thresholds
-│   └── report.mjs             # JSON → Markdown renderer
+│   ├── report.mjs             # JSON → Markdown renderer (verdict, summaries, findings)
+│   ├── findings.mjs           # dedup + deterministic sort
+│   ├── calibration.mjs        # self-report vs. scan overlay (quiz data)
+│   ├── catalog.mjs            # vendored teardown facts lookup
+│   ├── ignore.mjs             # shared path filters (junk dirs, env, test files)
+│   ├── version.mjs            # engine name/version/commit
+│   ├── onboarding.mjs         # `vibe-check setup` installer logic
+│   └── providers/             # one module per analysis capability
+│       ├── semgrep.mjs        # custom teardown rules (rules/peek/*)
+│       ├── osv.mjs            # dependency CVEs (osv-scanner)
+│       ├── madge.mjs          # circular deps → TD-021
+│       ├── scc.mjs            # file size → TD-019
+│       ├── gitleaks.mjs       # secrets → TD-016
+│       ├── eslint.mjs         # language-linter hygiene (QA)
+│       └── tests.mjs          # test presence + assertion heuristic (QA)
 ├── schema/
 │   ├── peek-config.schema.json   # config contract (JSON Schema, versioned)
 │   └── peek-report.schema.json   # report contract (JSON Schema, versioned)
@@ -161,10 +175,14 @@ the `quiz` block only when answers exist.
 
 ```
 config ──▶ validate
-        ──▶ Semgrep (rules/peek/*.yaml filtered by enabledRules) ──▶ findings
-        ──▶ OSV (lockfiles / manifests)                          ──▶ dependency findings
-        ──▶ hygiene (dead code, unused exports — QA pillar)      ──▶ hygiene findings
-        ──▶ map findings → pillar → points
+        ──▶ providers (registry §5.7):
+        │     Semgrep (rules/peek/*.yaml filtered by enabledRules) ──▶ teardown findings
+        │     OSV-Scanner (lockfiles)                              ──▶ dependency findings
+        │     Madge (circular deps) · scc (file size)               ──▶ teardown findings
+        │     Gitleaks (secrets)                                    ──▶ teardown findings
+        │     ESLint (linter) · tests (presence/assertions)         ──▶ hygiene + QA findings
+        ──▶ dedup (same teardownId + file/line collapses)
+        ──▶ map findings → pillar → points (dependency CVEs + test-file findings excluded from score)
         ──▶ score (reuse quiz constants) + tier
         ──▶ render AUDIT-REPORT.md + peek-report.json
 ```
@@ -231,6 +249,10 @@ Two cross-cutting requirements:
 | | dependency-cruiser / ArchUnit / deptrac / Madge | architecture graph (TD-021) | architecture facet |
 | | radon / scc / tokei | complexity + size metrics (TD-019) | qa / architecture facet |
 
+A pure-Node **`tests` provider** (no binary to install) is also in the core tier:
+it reports whether the repo has any test files, and flags test files with no
+assertion calls as a TD-017 ("hallucinated tests") heuristic — see §8.1.
+
 ### 5.8 Setup & onboarding (the installer)
 
 > **Terminology:** we call the setup experience **onboarding** — it is inviting,
@@ -277,6 +299,9 @@ Reuse the quiz's exact constants — already proven coherent:
 
 - Direction: **higher = riskier**, matching the quiz.
 - Each finding contributes `points` to its pillar; pillar scores are capped at the pillar max; total capped at 350.
+- Findings inside test/fixture files are **reported but not scored** — test code
+  is not shipped, but a real key committed to a test file is still public in git
+  and is flagged in its own report section.
 - Criticals impose a **hard floor** (e.g. any critical → tier cannot be green), so "readiness" stays truthful.
 - **Not statically verifiable** TDs are reported as "see guide rule X", not silently scored as zero.
 
@@ -299,10 +324,16 @@ A rule is a **`(TD × language)` matrix cell**, not one pattern. v1 coverage ord
 | TD-045 | `ts-ignore` / `any` escape hatch | TS only | — | — | architecture |
 | TD-046 | bare `except: pass` | — | Python only | — | runtime |
 
+> **Shipped beyond v1's 8:** TD-050 (unverified payment webhook, TS/Python) and
+> TD-051 (client-supplied entitlement, TS/PHP), plus the provider-driven TDs —
+> TD-016 (Gitleaks), TD-019 (scc), TD-021 (Madge), TD-017 (tests heuristic). The
+> "8 rules" table above is the original Semgrep matrix, not the current ceiling.
+
 ### 7.2 Detectability split (full catalog, 40 TDs)
 
 - **~25 statically detectable** via Semgrep: TD-002, 004, 006, 007, 008, 009, 016, 018, 019, 020, 022, 026, 030, 031, 032, 033, 034, 035, 036, 037, 038, 039, 040, 041, 042, 043, 044, 045, 046…
-- **~15 not statically detectable** (behavioral/architectural): TD-014 (prompt injection), 017 (hallucinated tests), 021 (pattern fragmentation), 027 (runaway agent), 028 (contract regression), 047/048/049 (logic/race)… → reported as "see Environment guide rules 16–22", not scored.
+- **~14 not statically detectable** (behavioral/architectural): TD-014 (prompt injection), 027 (runaway agent), 028 (contract regression), 047/048/049 (logic/race)… → reported as "see Environment guide rules 16–22", not scored.
+- **Partially detectable** — TD-017 (hallucinated tests) has a heuristic: the `tests` provider flags test files with no assertion calls (§8.1). TD-021 (pattern fragmentation) is approximated by Madge's circular-dependency graph.
 - **A third case — "detectable, but not in your language":** a TD may have a Semgrep variant for one language but not another (e.g. TD-046 only exists for Python). The report distinguishes "not detectable at all" from "not covered for your stack", so coverage gaps are honest, never silent zeros.
 
 ### 7.3 Golden tests (the credibility gate)
@@ -349,20 +380,46 @@ entropy-based secret scanning. Tracked as a separate rule backlog item.
 
 ```markdown
 # Local Deep Code Audit Report
-**Date:** 2026-11-11
+**Date:** 2026-11-14
 **Engine:** vibe-check 0.1.0 (public, commit <hash>)
 
-## Overall Risk Score
-- 142 / 350 — 🟡 Needs Hardening
+## Verdict
+Your code scores **142/350** — Needs Hardening; the top issue is **lookup by raw
+id without tenant scope** (3 critical).
+Your dependencies carry **12 known CVE(s)**; the worst is critical `proxy-addr`
+— upgrade to fix.
+
+## Overall Risk
+- Your code: 142 / 350 — 🟡 Needs Hardening
+- Dependencies: 12 known CVE(s) — 1 critical, 6 high, 5 medium (reported separately)
+
+## Findings Summary
+| Check | Findings | What |
+| --- | ---: | --- |
+| semgrep | 4 | TD-008 ×3, TD-002 ×1 |
+| ... | | |
 
 ## Pillar Breakdown
 | Pillar | Risk Score | Max |
 | ... |
 
-## Findings
+## External Dependencies (CVEs)
+| Severity | Package | Version | CVEs | Fix |
+| ... |
+
+## Findings (your code)
 ### security
 - **TD-008** (`src/app/api/users/route.ts:41`): lookup by raw id without tenant scope
+  - message: what's wrong, in one line
+  - Fix: the one-line remediation
   → see https://peek.software/teardowns/TD-008
+
+## Findings in test files (not scored)
+_Test code is not shipped, so these do not affect the score — but a real secret
+committed to a test file is still public in git._
+### security
+- **TD-016** (`src/keys.test.ts:3`): Hardcoded secret (aws-access-token)
+  → see https://peek.software/teardowns/TD-016
 
 ## Not Statically Verifiable
 - TD-014 (prompt injection) — see guide rule 16
@@ -373,21 +430,33 @@ entropy-based secret scanning. Tracked as a separate rule backlog item.
 
 `peek-report.json` findings carry `{ id, file, line, severity, pillar, teardownId, message, fixSummary }` so an agent can be instructed: *"Read `peek-report.json` and fix every flagged teardown without breaking tests."*
 
+### 8.1 Test signal (QA pillar)
+
+A pure-Node `tests` provider adds two deterministic, offline facts about tests —
+it **never executes them** (running tests would break the offline principle):
+
+- **Presence** — no test files under the scanned targets → a `medium` QA hygiene
+  finding ("No unit tests detected"). The QA pillar otherwise has no signal.
+- **Assertions** — a test file with no recognizable assertion call
+  (`expect(`, `assert…`, `.should`, `fail(`…) → a `low` TD-017 finding
+  ("Test file with no assertions"). Heuristic: path conventions + an
+  assertion-call whitelist, so it is scored low and worded as a signal, not a
+  proof.
+- **Scoring boundary** — other providers' findings that land *inside* test files
+  (e.g. a hard-coded key gitleaks finds in `keys.test.ts`) are reported in their
+  own "not scored" section, never counted toward the risk score. The two signals
+  above are the only test-file findings that score.
+
 ---
 
 ## 9. Implementation plan (draft)
 
-**Phase 0 — contract.** Define `peek-report.json` schema + config schema + the facts snapshot format. Freeze scoring constants (import from quiz).
-
-**Phase 1 — engine skeleton (public repo).** CLI, config loader, **provider registry** (Semgrep + OSV-Scanner as the first two providers), finding dedup, pillar mapping, Markdown renderer, offline/deterministic guarantees. Ship with 0 custom rules.
-
-**Phase 2 — golden rulepack.** Write the 8 v1 rules (JS/TS first, then Python, then PHP) + golden test harness against the TD `vulnerableCode`/`hardenedCode` pairs — one fixture set per language. Vendor `catalog/teardowns.json` including the `languages` matrix.
-
-**Phase 3 — config generator (peek.software).** `POST /api/generate-scan-config` + quiz-results "Run the deep scan" section (download config + setup steps).
-
-**Phase 4 — calibration overlay (v2).** Config carries quiz scores; report shows self-report vs. scan.
-
-**Phase 5 — parameterized rules + full detectable catalog.**
+- ✅ **Phase 0 — contract.** `peek-report.json` + config schemas + the facts snapshot format; scoring constants frozen (imported from the quiz).
+- ✅ **Phase 1 — engine skeleton.** CLI, config loader, provider registry (Semgrep + OSV-Scanner + Madge + scc + Gitleaks + ESLint + tests), finding dedup, pillar mapping, Markdown renderer, offline/deterministic guarantees.
+- ✅ **Phase 2 — golden rulepack.** TD-002/008/016/032/033/042/045/046/050/051 across JS/TS/Python/PHP + the golden harness; `catalog/teardowns.json` vendored.
+- 🚧 **Phase 3 — config generator (peek.software).** Backend `deriveTargets` + `targets` param landed (uncommitted); the full quiz→config→scan flow still needs end-to-end testing and likely extension.
+- 🚧 **Phase 4 — calibration overlay.** Engine-side `computeCalibration` + the report overlay are in; still needs wiring with a real generated config.
+- ⬜ **Phase 5 — parameterized rules + full detectable catalog.**
 
 ---
 

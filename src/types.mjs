@@ -56,6 +56,8 @@
  * @property {string | null} fixSummary — one-line fix (nullable).
  * @property {FindingSource} source — which provider + rule produced this.
  * @property {DependencyInfo | null} dependency — populated for dependency findings.
+ * @property {boolean} [inTests] - true when the finding lives in a test/fixture
+ *   file (reported, but excluded from the risk score).
  */
 
 /**
