@@ -14,7 +14,7 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import { commandAvailable, runCommand } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
-import { IGNORED_DIRS, isIgnoredDir } from '../ignore.mjs';
+import { IGNORED_DIRS, NON_CODE_EXTS, isIgnoredDir } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').ScanConfig} ScanConfig */
@@ -66,6 +66,7 @@ export const sccProvider = {
         [
           '--by-file', '--format', 'json', '--no-complexity', '--no-cocomo', '--no-gitignore',
           '--exclude-dir', [...IGNORED_DIRS].join(','),
+          '--exclude-ext', [...NON_CODE_EXTS].join(','),
           target,
         ],
         { cwd: ctx.repoRoot },

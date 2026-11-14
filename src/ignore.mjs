@@ -47,3 +47,15 @@ export function isEnvFile(repoFile) {
   const base = repoFile.split(/[\\/]/).pop() ?? '';
   return base === '.env' || base.startsWith('.env.');
 }
+/** File extensions that are data or docs, not source code (never "monolithic code", rarely client code). */
+export const NON_CODE_EXTS = new Set(['json', 'jsonl', 'md', 'csv', 'txt', 'lock']);
+
+/**
+ * Does a repo-relative path end in a non-code extension (JSON data, docs, …)?
+ * @param {string} repoFile — repo-relative path.
+ * @returns {boolean}
+ */
+export function hasNonCodeExt(repoFile) {
+  const ext = repoFile.split('.').pop()?.toLowerCase() ?? '';
+  return NON_CODE_EXTS.has(ext);
+}

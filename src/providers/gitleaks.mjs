@@ -15,7 +15,7 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
-import { isEnvFile, isIgnoredDir } from '../ignore.mjs';
+import { hasNonCodeExt, isEnvFile, isIgnoredDir } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').RunContext} RunContext */
@@ -62,10 +62,10 @@ export const gitleaksProvider = {
         { cwd: ctx.repoRoot },
       );
       for (const leak of parseGitleaksJson(stdout)) {
-        // Skip junk dirs (node_modules, dist, …) and the local `.env` secret
-        // store — the latter is not "shipped to the browser" (TD-016's
-        // premise); it is the developer's own machine-local config.
-        if (isIgnoredDir(leak.file) || isEnvFile(leak.file)) {
+        // Skip junk dirs (node_modules, dist, …), the local `.env` secret
+        // store, and data/docs files (JSON samples, Markdown) — the latter two
+        // are not "hardcoded secret in client code" (TD-016's premise).
+        if (isIgnoredDir(leak.file) || isEnvFile(leak.file) || hasNonCodeExt(leak.file)) {
           skipped += 1;
           continue;
         }
