@@ -1,0 +1,115 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+rules:
+  - id: peek-td-050-unverified-webhook-route-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Webhook handler acts on the request body without verifying the provider signature — anyone can forge a webhook and flip billing state.
+    metadata:
+      peek:
+        teardownId: TD-050
+        pillar: security
+        severity: critical
+        title: Unverified payment webhook
+        fixSummary: 'Verify the signature before acting (Stripe uses webhooks.constructEvent on the raw body; PayPal uses POST /v1/notifications/verify-webhook-signature).'
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $APP.$METHOD($ROUTE, ($REQ, $RES) => {
+                ...
+                $REQ.body
+                ...
+              })
+          - pattern: |
+              $APP.$METHOD($ROUTE, async ($REQ, $RES) => {
+                ...
+                $REQ.body
+                ...
+              })
+      - metavariable-regex:
+          metavariable: $ROUTE
+          regex: '(?i).*(webhook|stripe|paypal).*'
+      - pattern-not: |
+          $APP.$METHOD($ROUTE, ($REQ, $RES) => {
+            ...
+            constructEvent(...)
+            ...
+          })
+      - pattern-not: |
+          $APP.$METHOD($ROUTE, ($REQ, $RES) => {
+            ...
+            verifyWebhookSignature(...)
+            ...
+          })
+      - pattern-not: |
+          $APP.$METHOD($ROUTE, async ($REQ, $RES) => {
+            ...
+            constructEvent(...)
+            ...
+          })
+      - pattern-not: |
+          $APP.$METHOD($ROUTE, async ($REQ, $RES) => {
+            ...
+            verifyWebhookSignature(...)
+            ...
+          })
+
+  - id: peek-td-050-unverified-webhook-functions-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Webhook handler acts on the request body without verifying the provider signature — anyone can forge a webhook and flip billing state.
+    metadata:
+      peek:
+        teardownId: TD-050
+        pillar: security
+        severity: critical
+        title: Unverified payment webhook
+        fixSummary: 'Verify the signature before acting (Stripe uses webhooks.constructEvent on the raw body; PayPal uses POST /v1/notifications/verify-webhook-signature).'
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: |
+              exports.$NAME = $FUNCTIONS.https.onRequest(async ($REQ, $RES) => {
+                ...
+                $REQ.body
+                ...
+              })
+          - pattern: |
+              export const $NAME = $FUNCTIONS.https.onRequest(async ($REQ, $RES) => {
+                ...
+                $REQ.body
+                ...
+              })
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: '(?i).*webhook.*'
+      - pattern-not: |
+          exports.$NAME = $FUNCTIONS.https.onRequest(async ($REQ, $RES) => {
+            ...
+            constructEvent(...)
+            ...
+          })
+      - pattern-not: |
+          exports.$NAME = $FUNCTIONS.https.onRequest(async ($REQ, $RES) => {
+            ...
+            verifyWebhookSignature(...)
+            ...
+          })
+      - pattern-not: |
+          export const $NAME = $FUNCTIONS.https.onRequest(async ($REQ, $RES) => {
+            ...
+            constructEvent(...)
+            ...
+          })
+      - pattern-not: |
+          export const $NAME = $FUNCTIONS.https.onRequest(async ($REQ, $RES) => {
+            ...
+            verifyWebhookSignature(...)
+            ...
+          })

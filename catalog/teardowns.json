@@ -91,6 +91,15 @@
       "fixSummary": "Split the feature into layers — a validation schema, a service for business logic, a repository for data access, and a thin UI — so each part is testable and replaceable on its own.",
       "mappedQuestion": "Q3.1",
       "languages": ["typescript", "javascript"]
+    },
+    {
+      "id": "TD-050",
+      "pillar": "security",
+      "severity": "critical",
+      "points": null,
+      "fixSummary": "Verify the webhook signature before acting on it — Stripe: webhooks.constructEvent on the raw body; PayPal: POST /v1/notifications/verify-webhook-signature and require verification_status === SUCCESS.",
+      "mappedQuestion": null,
+      "languages": ["typescript", "javascript"]
     }
   ]
 }
