@@ -5,7 +5,7 @@
   "description": "Machine-readable audit report emitted by the vibe-check engine. Findings carry enough detail for an agent to act on them.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "engine", "generatedAt", "riskScore", "pillars", "findings", "skippedProviders"],
+  "required": ["schemaVersion", "engine", "generatedAt", "riskScore", "pillars", "findings", "dependencies", "skippedProviders"],
   "properties": {
     "schemaVersion": { "type": "integer", "const": 1 },
     "engine": { "$ref": "#/definitions/engineInfo" },
@@ -16,6 +16,10 @@
     "riskScore": { "$ref": "#/definitions/riskScore" },
     "pillars": { "type": "array", "items": { "$ref": "#/definitions/pillarScore" } },
     "findings": { "type": "array", "items": { "$ref": "#/definitions/finding" } },
+    "dependencies": {
+      "description": "Dependency (CVE) rollup — reported separately from the code risk score.",
+      "$ref": "#/definitions/dependencySummary"
+    },
     "skippedProviders": { "type": "array", "items": { "$ref": "#/definitions/skippedProvider" } },
     "notStaticallyVerifiable": {
       "type": "array",
@@ -95,6 +99,18 @@
         "version": { "type": ["string", "null"] },
         "ecosystem": { "type": ["string", "null"] },
         "cveIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "dependencySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "critical", "high", "medium", "low"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "critical": { "type": "integer", "minimum": 0 },
+        "high": { "type": "integer", "minimum": 0 },
+        "medium": { "type": "integer", "minimum": 0 },
+        "low": { "type": "integer", "minimum": 0 }
       }
     },
     "skippedProvider": {

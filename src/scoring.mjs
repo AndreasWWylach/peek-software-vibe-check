@@ -100,6 +100,30 @@ export function severityPoints(severity) {
 }
 
 /**
+ * Summarize dependency (CVE) findings by severity.
+ *
+ * Dependencies are reported separately from the code risk score: a CVE is a
+ * different remediation ("upgrade this package") than a code flaw ("rewrite
+ * this logic"), and the quiz's self-report score has no dependency axis.
+ * @param {Finding[]} findings — any findings; only `kind === 'dependency'` count.
+ * @returns {{ total: number; critical: number; high: number; medium: number; low: number }}
+ */
+export function summarizeDependencies(findings) {
+  /** @type {Record<Severity, number>} */
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const finding of findings) {
+    if (finding.kind === 'dependency') counts[finding.severity] += 1;
+  }
+  return {
+    total: counts.critical + counts.high + counts.medium + counts.low,
+    critical: counts.critical,
+    high: counts.high,
+    medium: counts.medium,
+    low: counts.low,
+  };
+}
+
+/**
  * Compute per-pillar + total risk scores from findings.
  *
  * Pillar scores are capped at their maxima; the total is capped at

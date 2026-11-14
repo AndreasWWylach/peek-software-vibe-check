@@ -68,6 +68,16 @@
  */
 
 /**
+ * Dependency (CVE) severity rollup — reported separately from the code score.
+ * @typedef {Object} DependencySummary
+ * @property {number} total — total dependency findings.
+ * @property {number} critical
+ * @property {number} high
+ * @property {number} medium
+ * @property {number} low
+ */
+
+/**
  * A provider that was skipped, with the reason.
  * @typedef {Object} SkipRecord
  * @property {string} id — provider id.
@@ -132,6 +142,7 @@
  * @property {{ total: number; max: number; tier: Tier; riskPercentage: number }} riskScore
  * @property {PillarScore[]} pillars
  * @property {Finding[]} findings
+ * @property {DependencySummary} dependencies — CVE rollup (reported separately from the code score).
  * @property {SkipRecord[]} skippedProviders
  * @property {Array<{ teardownId: string; title: string; guidance: string }>} notStaticallyVerifiable
  * @property {Calibration | undefined} calibration — self-report vs scan (when quiz data present).

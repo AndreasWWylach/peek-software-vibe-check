@@ -46,7 +46,10 @@ export function fixPath(teardownIds) {
  * @returns {string}
  */
 export function renderMarkdown(report) {
-  const { engine, generatedAt, riskScore, pillars, findings, skippedProviders, notStaticallyVerifiable } = report;
+  const { engine, generatedAt, riskScore, pillars, findings, skippedProviders, notStaticallyVerifiable, dependencies } = report;
+  const dependencyFindings = findings.filter((finding) => finding.kind === 'dependency');
+  const codeFindings = findings.filter((finding) => finding.kind !== 'dependency');
+
   /** @type {string[]} */
   const lines = [];
 
@@ -54,9 +57,23 @@ export function renderMarkdown(report) {
   lines.push(`**Date:** ${generatedAt.slice(0, 10)}`);
   lines.push(`**Engine:** ${engine.name} ${engine.version} (public, commit ${engine.commit ?? 'n/a'})`);
   lines.push('');
-  lines.push('## Overall Risk Score');
-  lines.push(`- ${riskScore.total} / ${riskScore.max} — ${TIER_EMOJI[riskScore.tier]} ${TIER_LABEL[riskScore.tier]}`);
+  lines.push('## Overall Risk');
+  lines.push(`- **Your code:** ${riskScore.total} / ${riskScore.max} — ${TIER_EMOJI[riskScore.tier]} ${TIER_LABEL[riskScore.tier]}`);
+  if (dependencies && dependencies.total > 0) {
+    lines.push(
+      `- **Dependencies:** ${dependencies.total} known CVE(s) — ${severitySpread(dependencies)} (reported separately below)`,
+    );
+  } else {
+    lines.push('- **Dependencies:** none found.');
+  }
   lines.push('');
+
+  lines.push('## Findings Summary');
+  lines.push('| Check | Findings | What |');
+  lines.push('| --- | ---: | --- |');
+  lines.push(...renderSummary(codeFindings, dependencies));
+  lines.push('');
+
   lines.push('## Pillar Breakdown');
   lines.push('| Pillar | Risk Score | Max |');
   lines.push('| --- | ---: | ---: |');
@@ -64,17 +81,31 @@ export function renderMarkdown(report) {
     lines.push(`| ${pillar.label} | ${pillar.score} | ${pillar.max} |`);
   }
   lines.push('');
+  lines.push('_How this is scored: each finding adds points by severity — critical 20, high 10, medium 5, low 2 — to its pillar (capped at the pillar max). Dependency CVEs are not part of this score; they are reported separately below._');
+  lines.push('');
+
   if (report.calibration) {
     lines.push(...renderCalibration(report.calibration));
   }
-  lines.push('## Findings');
 
-  if (findings.length === 0) {
+  if (dependencyFindings.length > 0) {
+    lines.push('## External Dependencies (CVEs)');
+    lines.push('| Severity | Package | Version | CVEs | Fix |');
+    lines.push('| --- | --- | --- | --- | --- |');
+    for (const finding of dependencyFindings) {
+      lines.push(formatDependency(finding));
+    }
+    lines.push('');
+  }
+
+  lines.push('## Findings (your code)');
+
+  if (codeFindings.length === 0) {
     lines.push('_No findings._');
   } else {
     /** @type {string | null} */
     let currentPillar = null;
-    for (const finding of findings) {
+    for (const finding of codeFindings) {
       if (finding.pillar !== currentPillar) {
         currentPillar = finding.pillar;
         lines.push('');
@@ -104,7 +135,7 @@ export function renderMarkdown(report) {
   lines.push('## Next Steps');
   const teardownIds = [
     ...new Set(
-      findings
+      codeFindings
         .map((finding) => finding.teardownId)
         .filter((id) => typeof id === 'string')
         .map((id) => /** @type {string} */ (id)),
@@ -117,6 +148,85 @@ export function renderMarkdown(report) {
   }
   lines.push('');
   return lines.join('\n');
+}
+
+/**
+ * Render the per-provider "Findings Summary" table rows.
+ * @param {Finding[]} codeFindings
+ * @param {import('./types.mjs').DependencySummary | undefined} dependencies
+ * @returns {string[]}
+ */
+function renderSummary(codeFindings, dependencies) {
+  /** @type {Map<string, Finding[]>} */
+  const byProvider = new Map();
+  for (const finding of codeFindings) {
+    const provider = finding.source?.provider ?? 'unknown';
+    const list = byProvider.get(provider);
+    if (list) list.push(finding);
+    else byProvider.set(provider, [finding]);
+  }
+
+  const order = ['semgrep', 'osv', 'madge', 'scc', 'gitleaks', 'eslint'];
+  /** @type {string[]} */
+  const lines = [];
+  for (const provider of order) {
+    if (provider === 'osv') {
+      if (dependencies && dependencies.total > 0) {
+        lines.push(`| OSV-Scanner | ${dependencies.total} CVE(s) | ${severitySpread(dependencies)} — see External Dependencies |`);
+      } else {
+        lines.push('| OSV-Scanner | 0 | — |');
+      }
+      continue;
+    }
+    const list = byProvider.get(provider) ?? [];
+    if (list.length === 0) {
+      lines.push(`| ${provider} | 0 | — |`);
+      continue;
+    }
+    lines.push(`| ${provider} | ${list.length} | ${summarizeGroup(list)} |`);
+  }
+  return lines;
+}
+
+/**
+ * Compact "teardown ×count, …" description of a provider's findings.
+ * @param {Finding[]} findings
+ * @returns {string}
+ */
+function summarizeGroup(findings) {
+  /** @type {Map<string, number>} */
+  const byKey = new Map();
+  for (const finding of findings) {
+    const key = finding.teardownId ?? finding.source.ruleId ?? '?';
+    byKey.set(key, (byKey.get(key) ?? 0) + 1);
+  }
+  return [...byKey.entries()].map(([key, count]) => `${key} ×${count}`).join(', ');
+}
+
+/**
+ * A "5 critical, 7 high" severity rollup string.
+ * @param {{ critical: number; high: number; medium: number; low: number }} summary
+ * @returns {string}
+ */
+function severitySpread(summary) {
+  const parts = [];
+  if (summary.critical) parts.push(`${summary.critical} critical`);
+  if (summary.high) parts.push(`${summary.high} high`);
+  if (summary.medium) parts.push(`${summary.medium} medium`);
+  if (summary.low) parts.push(`${summary.low} low`);
+  return parts.length > 0 ? parts.join(', ') : '—';
+}
+
+/**
+ * Format a dependency (CVE) finding as a Markdown table row.
+ * @param {Finding} finding
+ * @returns {string}
+ */
+function formatDependency(finding) {
+  const dep = finding.dependency;
+  const cves = dep?.cveIds?.join(', ') ?? finding.source.ruleId ?? 'CVE';
+  const fix = finding.fixSummary ? ` ${finding.fixSummary}` : '';
+  return `| ${finding.severity} | \`${dep?.package ?? finding.file}\` | ${dep?.version ?? '?'} | ${cves} |${fix} |`;
 }
 
 /**

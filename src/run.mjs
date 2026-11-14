@@ -21,7 +21,7 @@ import { sccProvider } from './providers/scc.mjs';
 import { gitleaksProvider } from './providers/gitleaks.mjs';
 import { eslintProvider } from './providers/eslint.mjs';
 import { dedupeFindings, sortFindings } from './findings.mjs';
-import { computeScores, MAX_TOTAL_SCORE } from './scoring.mjs';
+import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
 import { listTeardowns } from './catalog.mjs';
 import { renderMarkdown } from './report.mjs';
@@ -60,7 +60,11 @@ export async function run(configPath, options) {
     ctx,
   );
   const sorted = sortFindings(dedupeFindings(findings));
-  const scores = computeScores(sorted);
+  // Dependency CVEs score separately: "upgrade this package" is not the same
+  // remediation as "rewrite this code", and the quiz has no dependency axis.
+  const codeFindings = sorted.filter((finding) => finding.kind !== 'dependency');
+  const scores = computeScores(codeFindings);
+  const dependencies = summarizeDependencies(sorted);
 
   const { total, max, tier, riskPercentage } = scores;
   const teardownFacts = await listTeardowns();
@@ -68,7 +72,7 @@ export async function run(configPath, options) {
     quiz: config.quiz,
     scanTotal: total,
     scanPillars: scores.pillars,
-    findings: sorted,
+    findings: codeFindings,
     teardownFacts,
   });
 
@@ -79,6 +83,7 @@ export async function run(configPath, options) {
     riskScore: { total, max, tier, riskPercentage },
     pillars: scores.pillars,
     findings: sorted,
+    dependencies,
     skippedProviders: skipped,
     notStaticallyVerifiable: [],
     ...(calibration ? { calibration } : {}),
