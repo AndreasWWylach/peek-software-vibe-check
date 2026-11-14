@@ -19,6 +19,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { commandAvailable, runCommand } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
+import { materializeTenantRule, readTenantColumn } from './tenant-rule.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').ScanConfig} ScanConfig */
@@ -71,7 +72,26 @@ export const semgrepProvider = {
   available: () => commandAvailable('semgrep'),
   applicable: () => true,
   async run(config, ctx) {
-    const ruleFiles = discoverRules(config);
+    let ruleFiles = discoverRules(config);
+
+    // v2 parameterization: when the config names a tenant column, replace the
+    // generic TD-008 TypeScript rule with a precise materialization requiring
+    // exactly that column (the config stays inert — only the column name is
+    // read, never rule code).
+    const tenantColumn = readTenantColumn(config);
+    if (tenantColumn) {
+      const withoutGeneric = ruleFiles.filter(
+        (file) => !file.endsWith(join('TD-008', 'typescript.yaml')),
+      );
+      if (withoutGeneric.length < ruleFiles.length) {
+        // `VIBE_CHECK_RULE_DIR` (optional) lets a host point the materialized
+        // rule at a path its semgrep can reach — e.g. a container mount that
+        // doesn't include /tmp. Defaults to the OS temp dir.
+        ruleFiles = [...withoutGeneric, materializeTenantRule(tenantColumn, process.env.VIBE_CHECK_RULE_DIR)];
+        ctx.log(`  TD-008 tenant scope: ${tenantColumn}`);
+      }
+    }
+
     if (ruleFiles.length === 0) {
       ctx.log('  no enabled rules with matching variants — nothing to scan');
       return [];

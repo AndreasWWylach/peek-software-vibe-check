@@ -36,8 +36,15 @@
     },
     "ruleParams": {
       "type": "object",
-      "description": "Reserved for v2 parameterized rules.",
-      "default": {}
+      "description": "Parameterized rules (v2). Values are inert data — the engine materializes precise rules from them at scan time.",
+      "default": {},
+      "properties": {
+        "tenantColumn": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "Tenant-scope column for TD-008 (e.g. organizationId)."
+        }
+      }
     },
     "scoring": {
       "type": "object",
