@@ -14,7 +14,7 @@
  * With zero vendored rules (Phase 1) this provider discovers nothing and
  * returns no findings.
  */
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { commandAvailable, runCommand } from '../proc.mjs';
@@ -57,12 +57,38 @@ function discoverRules(config) {
     if (!existsSync(tdDir)) continue;
     for (const file of readdirSync(tdDir)) {
       if (!file.endsWith('.yaml')) continue;
-      const lang = file.slice(0, -'.yaml'.length).toLowerCase();
-      // A variant applies when the config lists its language (or lists none).
-      if (languages.size === 0 || languages.has(lang)) files.push(join(tdDir, file));
+      // A variant applies when the config lists any of its declared languages
+      // (or lists none). Rules may target several languages — e.g. a TypeScript
+      // rule that also matches plain JavaScript — so we read the rule's own
+      // `languages:` block rather than guessing from the file name.
+      const declared = declaredLanguages(join(tdDir, file));
+      if (languages.size === 0 || declared.some((lang) => languages.has(lang))) {
+        files.push(join(tdDir, file));
+      }
     }
   }
   return files.sort();
+}
+
+/**
+ * The languages a rule file declares across all of its `languages:` blocks.
+ * Falls back to the file name (e.g. `typescript.yaml`) when no block is found.
+ * @param {string} file
+ * @returns {string[]}
+ */
+function declaredLanguages(file) {
+  /** @type {Set<string>} */
+  const langs = new Set();
+  try {
+    const text = readFileSync(file, 'utf8');
+    for (const block of text.matchAll(/languages:\s*((?:\s*-\s*\w+\s*)+)/g)) {
+      for (const item of block[1].matchAll(/-\s*(\w+)/g)) langs.add(item[1].toLowerCase());
+    }
+  } catch {
+    // Unreadable file — fall back to the file name below.
+  }
+  if (langs.size === 0) langs.add(file.slice(file.lastIndexOf('/') + 1, -'.yaml'.length).toLowerCase());
+  return [...langs];
 }
 
 /** @type {Provider} */
