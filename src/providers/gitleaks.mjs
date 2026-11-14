@@ -11,8 +11,8 @@
  * deterministic; the secret VALUE is never copied into a finding (the report
  * must not re-expose the secret it just found).
  */
-import { existsSync } from 'node:fs';
-import { isAbsolute, relative } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { isAbsolute, join, relative } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
 import { hasNonCodeExt, isEnvFile, isIgnoredDir } from '../ignore.mjs';
@@ -26,6 +26,31 @@ import { hasNonCodeExt, isEnvFile, isIgnoredDir } from '../ignore.mjs';
 
 /** The teardown this provider maps to (hardcoded API key / secret). */
 const TEARDOWN_ID = 'TD-016';
+
+/**
+ * Whether a file is an unmistakable Firebase web SDK config, whose `apiKey` /
+ * `appId` / site key are public by design (the real credential is the
+ * project's security rules, not the key itself). Gitleaks flags these because
+ * they look like API keys, but shipping them to the browser is correct.
+ * @param {string} file — absolute path
+ * @returns {boolean}
+ */
+function isFirebaseWebConfig(file) {
+  try {
+    const text = readFileSync(file, 'utf8');
+    const has = (/** @type {string} */ needle) => text.includes(needle);
+    // `authDomain` + `projectId` + an apiKey, inside a Firebase init/config
+    // object, is the browser-SDK shape — never a server-side credential.
+    return (
+      has('authDomain') &&
+      has('projectId') &&
+      has('apiKey') &&
+      (has('firebaseConfig') || has('initializeApp'))
+    );
+  } catch {
+    return false;
+  }
+}
 
 /** Fallbacks when the vendored catalog does not yet carry TD-016. */
 const DEFAULTS = {
@@ -53,6 +78,9 @@ export const gitleaksProvider = {
     /** @type {Finding[]} */
     const findings = [];
     let skipped = 0;
+    let publicSkipped = 0;
+    /** @type {Map<string, boolean>} Firebase web config memo, keyed by absolute path. */
+    const firebaseMemo = new Map();
     for (const target of targets) {
       // `runCommandCapture` because gitleaks exits 1 when leaks are found (the
       // JSON report is still written to stdout via `--report-path -`).
@@ -69,8 +97,22 @@ export const gitleaksProvider = {
           skipped += 1;
           continue;
         }
+        // Firebase web configs ship public keys by design — skip, not report.
+        const abs = isAbsolute(leak.file) ? leak.file : join(ctx.repoRoot, leak.file);
+        let firebase = firebaseMemo.get(abs);
+        if (firebase === undefined) {
+          firebase = isFirebaseWebConfig(abs);
+          firebaseMemo.set(abs, firebase);
+        }
+        if (firebase) {
+          publicSkipped += 1;
+          continue;
+        }
         findings.push(toFinding(leak, ctx.repoRoot, fact));
       }
+    }
+    if (publicSkipped > 0) {
+      ctx.log(`  gitleaks: skipped ${publicSkipped} public-by-design key(s) in Firebase web configs`);
     }
     if (skipped > 0) {
       ctx.log(`  gitleaks: skipped ${skipped} leak(s) in ignored dirs / .env files`);
