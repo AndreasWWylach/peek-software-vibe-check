@@ -76,11 +76,13 @@ test('commandFor falls back to the default command', () => {
   assert.equal(commandFor(madge.install, null), 'npm install -g madge');
 });
 
-test('semgrep install falls back to pip when pipx is absent', () => {
+test('semgrep install tries pipx, then pip, then bootstraps pip via get-pip.py', () => {
   const semgrep = TOOLS.find((tool) => tool.id === 'semgrep');
   assert.ok(semgrep);
   const command = commandFor(semgrep.install, null);
   assert.ok(command.includes('pipx install semgrep'), 'pipx path stays first');
-  assert.ok(command.includes('python3 -m pip install --user semgrep'), 'pip fallback present');
-  assert.ok(command.includes('||'), 'fallback is chained with ||');
+  assert.ok(command.includes('pip3 install --user semgrep'), 'pip3 fallback present');
+  assert.ok(command.includes('python3 -m pip install --user semgrep'), 'python3 -m pip fallback present');
+  assert.ok(command.includes('bootstrap.pypa.io/get-pip.py'), 'bootstraps pip via the official get-pip.py');
+  assert.ok(command.includes('exit 1'), 'fails loudly when no Python/pip exists');
 });

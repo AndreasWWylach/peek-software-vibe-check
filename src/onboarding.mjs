@@ -84,9 +84,20 @@ export const TOOLS = [
     minVersion: [1, 0, 0],
     install: {
       kind: 'command',
-      summary: 'Install semgrep via pipx (falls back to pip if pipx is absent)',
+      summary: 'Install semgrep via pipx (falls back to pip; bootstraps pip if missing)',
       source: 'https://semgrep.dev',
-      commands: { default: 'command -v pipx >/dev/null 2>&1 && pipx install semgrep || python3 -m pip install --user semgrep' },
+      commands: {
+        default:
+          'if command -v pipx >/dev/null 2>&1; then pipx install semgrep; ' +
+          'elif command -v pip3 >/dev/null 2>&1; then pip3 install --user semgrep; ' +
+          'elif python3 -m pip --version >/dev/null 2>&1; then python3 -m pip install --user semgrep; ' +
+          'elif command -v python3 >/dev/null 2>&1; then ' +
+          'echo "no pip/pipx found — bootstrapping pip via the official get-pip.py, then installing semgrep"; ' +
+          'curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/vibe-check-get-pip.py && ' +
+          'python3 /tmp/vibe-check-get-pip.py --user && ' +
+          'python3 -m pip install --user semgrep; ' +
+          'else echo "semgrep needs Python 3 with pip or pipx. Install python3 + python3-pip first (e.g. sudo apt-get install -y python3 python3-pip, or brew install semgrep), then re-run: vibe-check setup"; exit 1; fi',
+      },
     },
   },
   {
