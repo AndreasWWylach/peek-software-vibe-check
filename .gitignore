@@ -12,3 +12,4 @@ AUDIT-REPORT.md
 # Coverage / temp
 coverage/
 .tmp/
+docs/vibecoded-code-semgrep.md
