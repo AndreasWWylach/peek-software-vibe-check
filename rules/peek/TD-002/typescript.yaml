@@ -19,3 +19,27 @@ rules:
     patterns:
       - pattern: '$CLIENT.chat.completions.create({...})'
       - pattern-not: '$CLIENT.chat.completions.create({..., max_tokens: $CAP, ...})'
+
+  - id: peek-td-002-unbounded-llm-body-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: LLM request body without a max_tokens cap — output is unbounded and spend is unconstrained.
+    metadata:
+      peek:
+        teardownId: TD-002
+        pillar: runtime
+        severity: critical
+        title: LLM call without a token cap
+        fixSummary: Cap max_tokens, require auth, and rate-limit per user.
+      category: runtime
+    patterns:
+      - pattern-either:
+          # Raw-fetch and SDK-style chat bodies: a request object with BOTH a
+          # model and messages is an LLM call (DeepSeek, OpenAI, Gemini, …).
+          # Shorthand `model` and explicit `model: …` both count.
+          - pattern: '{ model: $MODEL, messages: $MESSAGES }'
+          - pattern: '{ model, messages: $MESSAGES }'
+      - pattern-not: '{ max_tokens: $CAP }'
+      - pattern-not: '{ max_completion_tokens: $CAP }'

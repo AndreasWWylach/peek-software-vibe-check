@@ -14,6 +14,7 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import { commandAvailable, runCommand } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
+import { IGNORED_DIRS, isIgnoredDir } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').ScanConfig} ScanConfig */
@@ -62,10 +63,19 @@ export const sccProvider = {
     for (const target of targets) {
       const stdout = runCommand(
         'scc',
-        ['--by-file', '--format', 'json', '--no-complexity', '--no-cocomo', '--no-gitignore', target],
+        [
+          '--by-file', '--format', 'json', '--no-complexity', '--no-cocomo', '--no-gitignore',
+          '--exclude-dir', [...IGNORED_DIRS].join(','),
+          target,
+        ],
         { cwd: ctx.repoRoot },
       );
       for (const file of parseSccJson(stdout)) {
+        // Only flag code-bearing files under the app's own source. Data files
+        // (JSON, Markdown, caches) have `code === 0` and are not "monolithic
+        // code"; junk dirs (node_modules, dist, …) are excluded defensively.
+        if (file.code === 0) continue;
+        if (isIgnoredDir(file.location)) continue;
         if (file.lines < threshold) continue;
         findings.push(toFinding(file, ctx.repoRoot, threshold, fact));
       }

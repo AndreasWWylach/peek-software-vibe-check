@@ -11,6 +11,7 @@
  */
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 /** Parsed package.json (typed `any` — this is our own trusted file). */
 const PKG = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
@@ -21,13 +22,18 @@ export const ENGINE_NAME = 'vibe-check';
 /** Engine version, read from package.json. */
 export const ENGINE_VERSION = /** @type {string} */ (PKG.version);
 
+/** Absolute path to the engine's own repo root (pins the report to a reviewable revision). */
+const ENGINE_DIR = fileURLToPath(new URL('..', import.meta.url));
+
 /**
- * Resolve the current short git commit hash, or null when not in a git repo.
+ * Resolve the ENGINE's short git commit hash, or null when not in a git repo.
+ * Pinned to the engine's own repository — the scanned app's HEAD is irrelevant
+ * to reproducibility (and would confuse "which engine produced this report").
  * @returns {string | null}
  */
 export function readCommit() {
   try {
-    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+    return execFileSync('git', ['-C', ENGINE_DIR, 'rev-parse', '--short', 'HEAD'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();

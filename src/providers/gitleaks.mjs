@@ -15,6 +15,7 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
+import { isEnvFile, isIgnoredDir } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').RunContext} RunContext */
@@ -51,6 +52,7 @@ export const gitleaksProvider = {
     const fact = await lookupTeardown(TEARDOWN_ID);
     /** @type {Finding[]} */
     const findings = [];
+    let skipped = 0;
     for (const target of targets) {
       // `runCommandCapture` because gitleaks exits 1 when leaks are found (the
       // JSON report is still written to stdout via `--report-path -`).
@@ -60,8 +62,18 @@ export const gitleaksProvider = {
         { cwd: ctx.repoRoot },
       );
       for (const leak of parseGitleaksJson(stdout)) {
+        // Skip junk dirs (node_modules, dist, …) and the local `.env` secret
+        // store — the latter is not "shipped to the browser" (TD-016's
+        // premise); it is the developer's own machine-local config.
+        if (isIgnoredDir(leak.file) || isEnvFile(leak.file)) {
+          skipped += 1;
+          continue;
+        }
         findings.push(toFinding(leak, ctx.repoRoot, fact));
       }
+    }
+    if (skipped > 0) {
+      ctx.log(`  gitleaks: skipped ${skipped} leak(s) in ignored dirs / .env files`);
     }
     return findings;
   },
