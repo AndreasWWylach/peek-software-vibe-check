@@ -351,6 +351,17 @@ function formatFinding(finding) {
   }
 
   const head = finding.teardownId ?? finding.source.ruleId ?? finding.id;
-  const deepLink = finding.teardownId ? `\n  → see ${teardownPath(finding.teardownId)}` : '';
-  return `- **${head}** (\`${location}\`): ${finding.title}${deepLink}`;
+  const parts = [`- **${head}** (\`${location}\`): ${finding.title}`];
+  // Explain the finding, then how to fix it — the "one glance → oh, that's
+  // why" moment the report is aiming for.
+  if (finding.message && finding.message !== finding.title) {
+    parts.push(`  - ${finding.message}`);
+  }
+  if (finding.fixSummary) {
+    parts.push(`  - Fix: ${finding.fixSummary}`);
+  }
+  if (finding.teardownId) {
+    parts.push(`  → see ${teardownPath(finding.teardownId)}`);
+  }
+  return parts.join('\n');
 }

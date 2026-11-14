@@ -15,7 +15,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
-import { hasNonCodeExt, isEnvFile, isIgnoredDir } from '../ignore.mjs';
+import { hasNonCodeExt, isEnvFile, isIgnoredDir, isTestFile } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').RunContext} RunContext */
@@ -79,6 +79,7 @@ export const gitleaksProvider = {
     const findings = [];
     let skipped = 0;
     let publicSkipped = 0;
+    let testSkipped = 0;
     /** @type {Map<string, boolean>} Firebase web config memo, keyed by absolute path. */
     const firebaseMemo = new Map();
     for (const target of targets) {
@@ -97,6 +98,11 @@ export const gitleaksProvider = {
           skipped += 1;
           continue;
         }
+        // Test/fixture files hold fake values by convention — skip, don't report.
+        if (isTestFile(leak.file)) {
+          testSkipped += 1;
+          continue;
+        }
         // Firebase web configs ship public keys by design — skip, not report.
         const abs = isAbsolute(leak.file) ? leak.file : join(ctx.repoRoot, leak.file);
         let firebase = firebaseMemo.get(abs);
@@ -110,6 +116,9 @@ export const gitleaksProvider = {
         }
         findings.push(toFinding(leak, ctx.repoRoot, fact));
       }
+    }
+    if (testSkipped > 0) {
+      ctx.log(`  gitleaks: skipped ${testSkipped} leak(s) in test/fixture files`);
     }
     if (publicSkipped > 0) {
       ctx.log(`  gitleaks: skipped ${publicSkipped} public-by-design key(s) in Firebase web configs`);
@@ -159,7 +168,7 @@ function toFinding(leak, repoRoot, fact) {
     pillar: fact?.pillar ?? DEFAULTS.pillar,
     teardownId: TEARDOWN_ID,
     title: `Hardcoded secret (${leak.ruleId || 'unknown'})`,
-    message: `${leak.ruleId} — ${leak.description}`,
+    message: leak.description || null,
     fixSummary: fact?.fixSummary ?? DEFAULTS.fixSummary,
     source: { provider: 'gitleaks', ruleId: leak.ruleId },
     dependency: null,

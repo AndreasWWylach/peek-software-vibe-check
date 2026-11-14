@@ -82,3 +82,33 @@ test('renderMarkdown keeps a plain Last Mile line when there are no findings', (
   assert.ok(markdown.includes('- Get It Fixed by Last Mile'));
   assert.ok(!markdown.includes('/fix?findings='));
 });
+
+test('renderMarkdown explains each finding with its message and fix', () => {
+  const report = {
+    engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
+    generatedAt: '2026-11-13T00:00:00.000Z',
+    riskScore: { total: 2, max: 350, tier: 'green', riskPercentage: 0 },
+    pillars: [],
+    findings: [
+      {
+        kind: 'teardown',
+        teardownId: 'TD-002',
+        file: 'src/ai.ts',
+        line: 4,
+        severity: 'critical',
+        pillar: 'runtime',
+        title: 'LLM call without a token cap',
+        message: 'Output is unbounded and spend is unconstrained.',
+        fixSummary: 'Cap max_tokens, require auth, and rate-limit per user.',
+        source: { provider: 'semgrep', ruleId: 'peek-td-002' },
+      },
+    ],
+    dependencies: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+    skippedProviders: [],
+    notStaticallyVerifiable: [],
+  };
+
+  const markdown = renderMarkdown(/** @type {any} */ (report));
+  assert.ok(markdown.includes('Output is unbounded and spend is unconstrained.'), markdown);
+  assert.ok(markdown.includes('Fix: Cap max_tokens, require auth, and rate-limit per user.'), markdown);
+});

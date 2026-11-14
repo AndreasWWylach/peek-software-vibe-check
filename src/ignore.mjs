@@ -59,3 +59,20 @@ export function hasNonCodeExt(repoFile) {
   const ext = repoFile.split('.').pop()?.toLowerCase() ?? '';
   return NON_CODE_EXTS.has(ext);
 }
+
+/**
+ * Is this a test or fixture file? Hard-coded "secrets" in tests are almost
+ * always fake fixtures (e.g. a 32-char hex token), so TD-016 skips them rather
+ * than cry wolf. A real key committed to a test file is still committed code,
+ * but that is rarer and outside TD-016's "shipped to the browser" premise.
+ * @param {string} repoFile — repo-relative path.
+ * @returns {boolean}
+ */
+export function isTestFile(repoFile) {
+  const segments = repoFile.split(/[\\/]/);
+  const base = segments.pop() ?? '';
+  // `inbound.test.js`, `foo.spec.ts`, `test_foo.py`, `foo_test.py`, `foo.test`…
+  if (/\.(test|spec)(\.|$)|^test_|_test\./i.test(base)) return true;
+  // …or anywhere under a test / fixture directory.
+  return segments.some((segment) => /^(tests?|__tests__|fixtures?|spec|mocks?)$/i.test(segment));
+}
