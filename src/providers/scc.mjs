@@ -41,6 +41,29 @@ const DEFAULTS = {
     'Split the feature into layers — a validation schema, a service for business logic, a repository for data access, and a thin UI — so each part is testable and replaceable on its own.',
 };
 
+/**
+ * Extensions that count as "code" for the monolithic-file smell (TD-019).
+ * Stylesheets and markup are excluded — a 500-line CSS file is a different,
+ * milder smell than a 500-line source file mixing UI, logic, and data access.
+ */
+const CODE_EXTS = new Set([
+  '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.mts', '.cts',
+  '.py', '.pyi', '.php', '.go', '.rb', '.java', '.kt', '.swift',
+  '.cs', '.rs', '.c', '.h', '.cpp', '.hpp', '.cc',
+]);
+
+/**
+ * Whether a file path names a source-code file (extension-based).
+ * Files with no extension are treated as code (they are unusual enough to flag).
+ * @param {string} location
+ * @returns {boolean}
+ */
+function hasCodeExt(location) {
+  const dot = location.lastIndexOf('.');
+  if (dot === -1) return true;
+  return CODE_EXTS.has(location.slice(dot).toLowerCase());
+}
+
 /** @type {Provider} */
 export const sccProvider = {
   id: 'scc',
@@ -74,9 +97,11 @@ export const sccProvider = {
       for (const file of parseSccJson(stdout)) {
         // Only flag code-bearing files under the app's own source. Data files
         // (JSON, Markdown, caches) have `code === 0` and are not "monolithic
-        // code"; junk dirs (node_modules, dist, …) are excluded defensively.
+        // code"; junk dirs (node_modules, dist, …) are excluded defensively;
+        // stylesheets/markup are excluded because TD-019 is about source code.
         if (file.code === 0) continue;
         if (isIgnoredDir(file.location)) continue;
+        if (!hasCodeExt(file.location)) continue;
         if (file.lines < threshold) continue;
         findings.push(toFinding(file, ctx.repoRoot, threshold, fact));
       }
@@ -142,7 +167,7 @@ function toFinding(file, repoRoot, threshold, fact) {
     severity: fact?.severity ?? DEFAULTS.severity,
     pillar: fact?.pillar ?? DEFAULTS.pillar,
     teardownId: TEARDOWN_ID,
-    title: `Monolithic file: ${repoFile}`,
+    title: `Monolithic file (${file.lines} lines)`,
     message: `${repoFile} is ${file.lines} lines (${file.code} of them code) — over the ${threshold}-line limit for a single file.`,
     fixSummary: fact?.fixSummary ?? DEFAULTS.fixSummary,
     source: { provider: 'scc', ruleId: 'monolithic-file' },

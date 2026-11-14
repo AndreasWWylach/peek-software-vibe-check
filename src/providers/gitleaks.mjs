@@ -116,7 +116,7 @@ function toFinding(leak, repoRoot, fact) {
     severity: fact?.severity ?? DEFAULTS.severity,
     pillar: fact?.pillar ?? DEFAULTS.pillar,
     teardownId: TEARDOWN_ID,
-    title: `Hardcoded secret: ${repoFile}${line ? `:${line}` : ''}`,
+    title: `Hardcoded secret (${leak.ruleId || 'unknown'})`,
     message: `${leak.ruleId} — ${leak.description}`,
     fixSummary: fact?.fixSummary ?? DEFAULTS.fixSummary,
     source: { provider: 'gitleaks', ruleId: leak.ruleId },
