@@ -1,0 +1,34 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-051 — Entitlement granted from a client-supplied value.
+#
+# The vulnerable shape: a server writes a billing/entitlement field
+# (`billingTier`, `planId`, `priceId`, …) straight from a client-supplied
+# value (`data.*` in a callable, `req.body.*` / `req.params.*` in a route).
+# The hardened shape derives the tier from the provider-verified subscription
+# and writes the derived value, so it never matches `data.*`/`req.*`.
+rules:
+  - id: peek-td-051-client-entitlement-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Billing entitlement granted from a client-supplied value — verify the subscription with the provider and derive the tier server-side.
+    metadata:
+      peek:
+        teardownId: TD-051
+        pillar: security
+        severity: critical
+        title: Entitlement granted from client claim
+        fixSummary: Derive the tier from the provider-verified subscription/plan and write that — never a value the client sent.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '{ $FIELD: data.$KEY, ... }'
+          - pattern: '{ $FIELD: $REQ.body.$KEY, ... }'
+          - pattern: '{ $FIELD: $REQ.params.$KEY, ... }'
+          - pattern: '{ $FIELD: $REQ.query.$KEY, ... }'
+      - metavariable-regex:
+          metavariable: $FIELD
+          regex: '(?i)^(billingTier|subscriptionTier|planId|priceId|entitlement|accessTier)$'
