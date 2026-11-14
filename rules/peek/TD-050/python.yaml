@@ -1,0 +1,107 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-050 — Unverified payment webhook (Python: Flask + Django).
+#
+# Same shape as the TypeScript rule: a webhook handler that reads the event
+# from the request and acts on it without verifying the provider signature
+# (Stripe `construct_event` / PayPal `verify_webhook_signature`). The
+# "verified" variants are mirrored as pattern-not. Split into two rules so the
+# route metavariable (Flask) and the name metavariable (Django) never conflict.
+rules:
+  - id: peek-td-050-unverified-webhook-flask-python
+    languages:
+      - python
+    severity: ERROR
+    message: Webhook handler acts on the request body without verifying the provider signature — anyone can forge a webhook and flip billing state.
+    metadata:
+      peek:
+        teardownId: TD-050
+        pillar: security
+        severity: critical
+        title: Unverified payment webhook
+        fixSummary: 'Verify the signature before acting (Stripe uses webhooks.construct_event on the raw body; PayPal uses POST /v1/notifications/verify-webhook-signature).'
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: |
+              @$APP.route($ROUTE, ...)
+              def $NAME(...):
+                ...
+                request.json
+                ...
+          - pattern: |
+              @$APP.route($ROUTE, ...)
+              def $NAME(...):
+                ...
+                request.get_json()
+                ...
+          - pattern: |
+              @$APP.route($ROUTE, ...)
+              def $NAME(...):
+                ...
+                request.data
+                ...
+      - metavariable-regex:
+          metavariable: $ROUTE
+          regex: '(?i).*(webhook|stripe|paypal).*'
+      - pattern-not: |
+          @$APP.route($ROUTE, ...)
+          def $NAME(...):
+            ...
+            $X.construct_event(...)
+            ...
+      - pattern-not: |
+          @$APP.route($ROUTE, ...)
+          def $NAME(...):
+            ...
+            construct_event(...)
+            ...
+      - pattern-not: |
+          @$APP.route($ROUTE, ...)
+          def $NAME(...):
+            ...
+            verify_webhook_signature(...)
+            ...
+
+  - id: peek-td-050-unverified-webhook-django-python
+    languages:
+      - python
+    severity: ERROR
+    message: Webhook handler acts on the request body without verifying the provider signature — anyone can forge a webhook and flip billing state.
+    metadata:
+      peek:
+        teardownId: TD-050
+        pillar: security
+        severity: critical
+        title: Unverified payment webhook
+        fixSummary: 'Verify the signature before acting (Stripe uses webhooks.construct_event on the raw body; PayPal uses POST /v1/notifications/verify-webhook-signature).'
+      category: security
+    patterns:
+      - pattern: |
+          @csrf_exempt
+          def $NAME($REQ):
+            ...
+            $REQ.body
+            ...
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: '(?i).*(webhook|stripe|paypal).*'
+      - pattern-not: |
+          @csrf_exempt
+          def $NAME($REQ):
+            ...
+            $X.construct_event(...)
+            ...
+      - pattern-not: |
+          @csrf_exempt
+          def $NAME($REQ):
+            ...
+            construct_event(...)
+            ...
+      - pattern-not: |
+          @csrf_exempt
+          def $NAME($REQ):
+            ...
+            verify_webhook_signature(...)
+            ...

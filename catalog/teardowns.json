@@ -99,7 +99,7 @@
       "points": null,
       "fixSummary": "Verify the webhook signature before acting on it — Stripe: webhooks.constructEvent on the raw body; PayPal: POST /v1/notifications/verify-webhook-signature and require verification_status === SUCCESS.",
       "mappedQuestion": null,
-      "languages": ["typescript", "javascript"]
+      "languages": ["typescript", "javascript", "python"]
     }
   ]
 }

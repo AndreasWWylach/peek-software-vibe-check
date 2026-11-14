@@ -36,7 +36,7 @@ rules:
       - pattern-not: |
           $APP.$METHOD($ROUTE, ($REQ, $RES) => {
             ...
-            constructEvent(...)
+            $X.constructEvent(...)
             ...
           })
       - pattern-not: |
@@ -48,7 +48,7 @@ rules:
       - pattern-not: |
           $APP.$METHOD($ROUTE, async ($REQ, $RES) => {
             ...
-            constructEvent(...)
+            $X.constructEvent(...)
             ...
           })
       - pattern-not: |
@@ -92,7 +92,7 @@ rules:
       - pattern-not: |
           exports.$NAME = $FUNCTIONS.https.onRequest(async ($REQ, $RES) => {
             ...
-            constructEvent(...)
+            $X.constructEvent(...)
             ...
           })
       - pattern-not: |
@@ -104,7 +104,7 @@ rules:
       - pattern-not: |
           export const $NAME = $FUNCTIONS.https.onRequest(async ($REQ, $RES) => {
             ...
-            constructEvent(...)
+            $X.constructEvent(...)
             ...
           })
       - pattern-not: |
