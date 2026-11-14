@@ -10,10 +10,12 @@ less setup.sh   # review before running — transparency first
 bash setup.sh
 ```
 
-`setup.sh` installs Node ≥ 22, clones the pinned engine release, and runs the
-**onboarding** to install the provider tools (semgrep, osv-scanner, madge, scc,
-gitleaks, eslint). Everything prints before it runs, and you can interrupt at
-any time — re-run to resume.
+`setup.sh` checks for Node ≥ 22 (printing the exact install command if it's
+missing), clones the pinned engine release, installs its single runtime
+dependency, exposes `vibe-check` on your PATH, and runs the **onboarding** to
+install the provider tools (semgrep, osv-scanner, madge, scc, gitleaks, eslint).
+Everything prints before it runs, and you can interrupt at any time — re-run to
+resume.
 
 ## 2. Get your config
 

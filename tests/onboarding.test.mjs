@@ -75,3 +75,12 @@ test('commandFor falls back to the default command', () => {
   assert.equal(commandFor(madge.install, 'brew'), 'npm install -g madge');
   assert.equal(commandFor(madge.install, null), 'npm install -g madge');
 });
+
+test('semgrep install falls back to pip when pipx is absent', () => {
+  const semgrep = TOOLS.find((tool) => tool.id === 'semgrep');
+  assert.ok(semgrep);
+  const command = commandFor(semgrep.install, null);
+  assert.ok(command.includes('pipx install semgrep'), 'pipx path stays first');
+  assert.ok(command.includes('python3 -m pip install --user semgrep'), 'pip fallback present');
+  assert.ok(command.includes('||'), 'fallback is chained with ||');
+});

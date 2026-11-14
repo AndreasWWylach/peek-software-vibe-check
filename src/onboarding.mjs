@@ -84,9 +84,9 @@ export const TOOLS = [
     minVersion: [1, 0, 0],
     install: {
       kind: 'command',
-      summary: 'Install semgrep via pipx (recommended)',
+      summary: 'Install semgrep via pipx (falls back to pip if pipx is absent)',
       source: 'https://semgrep.dev',
-      commands: { default: 'pipx install semgrep' },
+      commands: { default: 'command -v pipx >/dev/null 2>&1 && pipx install semgrep || python3 -m pip install --user semgrep' },
     },
   },
   {

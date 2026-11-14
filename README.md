@@ -48,8 +48,8 @@ vibe-check setup --yes            # non-interactive (accept everything)
 vibe-check setup --skip madge     # skip a tool
 ```
 
-Or bootstrap everything from a shell (installs Node, the engine, then runs the
-onboarding):
+Or bootstrap everything from a shell (checks Node ≥ 22, clones the engine,
+installs its dependency, puts `vibe-check` on PATH, then runs the onboarding):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AndreasWWylach/peek-software-vibe-check/main/setup.sh -o setup.sh
