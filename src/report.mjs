@@ -187,12 +187,13 @@ function renderVerdict(riskScore, codeFindings, dependencies, dependencyFindings
 }
 
 /**
- * The single most common code issue (by count, then by severity).
+ * The single most noteworthy code issue: Peek teardown findings outrank generic
+ * linter hygiene, then severity, then count.
  * @param {Finding[]} codeFindings
  * @returns {{ title: string; count: number; severity: import('./types.mjs').Severity } | null}
  */
 function topCodeIssue(codeFindings) {
-  /** @type {Map<string, { title: string; count: number; severity: import('./types.mjs').Severity }>} */
+  /** @type {Map<string, { title: string; count: number; severity: import('./types.mjs').Severity; teardownId?: string }>} */
   const groups = new Map();
   for (const finding of codeFindings) {
     const key = finding.teardownId ?? finding.source?.ruleId ?? finding.title;
@@ -201,13 +202,20 @@ function topCodeIssue(codeFindings) {
       group.count += 1;
       if (SEVERITY_RANK[finding.severity] > SEVERITY_RANK[group.severity]) group.severity = finding.severity;
     } else {
-      groups.set(key, { title: finding.title, count: 1, severity: finding.severity });
+      groups.set(key, {
+        title: finding.title,
+        count: 1,
+        severity: finding.severity,
+        teardownId: finding.teardownId ?? undefined,
+      });
     }
   }
   if (groups.size === 0) return null;
-  return [...groups.values()].sort(
-    (a, b) => b.count - a.count || SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity],
-  )[0];
+  return [...groups.values()].sort((a, b) => {
+    // Curated teardown issues (the "I didn't know that" ones) beat linter noise.
+    if (Boolean(a.teardownId) !== Boolean(b.teardownId)) return a.teardownId ? -1 : 1;
+    return SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || b.count - a.count;
+  })[0];
 }
 
 /**
