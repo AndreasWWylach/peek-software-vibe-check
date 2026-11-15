@@ -100,8 +100,9 @@ export const sccProvider = {
         // code"; junk dirs (node_modules, dist, …) are excluded defensively;
         // stylesheets/markup are excluded because TD-019 is about source code.
         if (file.code === 0) continue;
-        if (isIgnoredDir(file.location)) continue;
-        if (!hasCodeExt(file.location)) continue;
+        const repoFile = repoRelative(file.location, ctx.repoRoot);
+        if (isIgnoredDir(repoFile)) continue;
+        if (!hasCodeExt(repoFile)) continue;
         if (file.lines < threshold) continue;
         findings.push(toFinding(file, ctx.repoRoot, threshold, fact));
       }

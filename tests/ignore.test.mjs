@@ -14,6 +14,11 @@ test('isIgnoredDir flags dependency/build/cache dirs anywhere in the path', () =
   assert.equal(isIgnoredDir('node_modules/react/index.js'), true);
   assert.equal(isIgnoredDir('src/dist/bundle.js'), true);
   assert.equal(isIgnoredDir('src/app.ts'), false);
+  // Symfony/Pimcore generated cache+logs — never app source.
+  assert.equal(isIgnoredDir('var/cache/dev/App_KernelDevDebugContainer.php'), true);
+  assert.equal(isIgnoredDir('public/var/cache/dev/App_KernelDevDebugContainer.php'), true);
+  assert.equal(isIgnoredDir('var/log/dev.log'), true);
+  assert.equal(isIgnoredDir('src/var/Config.php'), true); // segment match, like node_modules
 });
 
 test('isEnvFile flags .env and .env.local but not source files', () => {

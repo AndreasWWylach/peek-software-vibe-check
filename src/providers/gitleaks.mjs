@@ -90,10 +90,13 @@ export const gitleaksProvider = {
         { cwd: ctx.repoRoot },
       );
       for (const leak of parseGitleaksJson(stdout)) {
+        // Relativize first: gitleaks echoes the absolute `--source` path, and
+        // the ignore guards are segment-based on repo-relative paths.
+        const repoFile = repoRelative(leak.file, ctx.repoRoot);
         // Skip junk dirs (node_modules, dist, …), the local `.env` secret
         // store, and data/docs files (JSON samples, Markdown) — the latter two
         // are not "hardcoded secret in client code" (TD-016's premise).
-        if (isIgnoredDir(leak.file) || isEnvFile(leak.file) || hasNonCodeExt(leak.file)) {
+        if (isIgnoredDir(repoFile) || isEnvFile(repoFile) || hasNonCodeExt(repoFile)) {
           skipped += 1;
           continue;
         }

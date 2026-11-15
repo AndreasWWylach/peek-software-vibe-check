@@ -25,6 +25,8 @@ export const IGNORED_DIRS = new Set([
   '.vscode',
   '.turbo',
   'vendor',
+  // Symfony / Pimcore generated cache + logs (also covers `public/var`).
+  'var',
 ]);
 
 /**
