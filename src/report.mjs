@@ -69,6 +69,7 @@ export function renderMarkdown(report) {
     lines.push('- **Dependencies:** none found.');
   }
   lines.push('');
+  lines.push(...renderStack(report.stack));
 
   lines.push('## Findings Summary');
   lines.push('| Check | Findings | What |');
@@ -172,6 +173,41 @@ export function renderMarkdown(report) {
 }
 
 /**
+ * Render the scan-time App Stack summary — a brief, readable sentence of what
+ * the app is built on (framework, database, services). Detection is offline and
+ * deterministic; the user is never asked.
+ * @param {Record<string, boolean> | undefined} stack
+ * @returns {string[]}
+ */
+function renderStack(stack) {
+  if (!stack || Object.keys(stack).length === 0) return [];
+
+  /** @type {string[]} */
+  const parts = [];
+  const firebaseBits = [];
+  if (stack.firestore) firebaseBits.push('Firestore database');
+  if (stack.cloudFunctions) firebaseBits.push('Cloud Functions');
+  if (stack.storage) firebaseBits.push('Storage');
+  if (stack.firebase || stack.firebaseAdmin || firebaseBits.length > 0) {
+    parts.push(`Firebase (${firebaseBits.join(', ') || 'project'})`);
+  }
+  if (stack.prisma) parts.push('Prisma ORM');
+  if (stack.express) parts.push('Express');
+
+  const frontendBits = [];
+  if (stack.next) frontendBits.push('Next.js');
+  else if (stack.react) frontendBits.push('React');
+  if (stack.vue) frontendBits.push('Vue');
+  if (stack.vite) frontendBits.push('Vite');
+  if (frontendBits.length > 0) parts.push(`${frontendBits.join(' + ')} frontend`);
+
+  if (stack.stripe) parts.push('Stripe payments');
+
+  if (parts.length === 0) return [];
+  return ['## App Stack', `Detected: ${parts.join(' · ')}.`, ''];
+}
+
+/**
  * The one-glance, plain-language verdict at the top of the report: the code
  * score in words, the single most common code issue, and the worst dependency.
  * @param {{ total: number; max: number; tier: import('./types.mjs').Tier }} riskScore
@@ -253,7 +289,7 @@ function renderSummary(codeFindings, dependencies) {
     if (list) list.push(finding);
     else byProvider.set(provider, [finding]);
   }
-  const order = ['semgrep', 'gitleaks', 'madge', 'scc', 'eslint', 'tests', 'osv'];
+  const order = ['semgrep', 'gitleaks', 'firebase', 'madge', 'scc', 'eslint', 'tests', 'osv'];
   /** @type {string[]} */
   const lines = [];
   for (const provider of order) {

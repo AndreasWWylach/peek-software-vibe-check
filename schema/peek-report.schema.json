@@ -21,6 +21,11 @@
       "$ref": "#/definitions/dependencySummary"
     },
     "skippedProviders": { "type": "array", "items": { "$ref": "#/definitions/skippedProvider" } },
+    "stack": {
+      "type": "object",
+      "description": "Scan-time stack markers (Firebase, Firestore, Prisma, React, …) — each value is boolean true when detected.",
+      "additionalProperties": { "type": "boolean" }
+    },
     "notStaticallyVerifiable": {
       "type": "array",
       "description": "Behavioral/architectural TDs that cannot be scored statically; reported as guidance, never scored.",

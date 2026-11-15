@@ -21,8 +21,10 @@ import { sccProvider } from './providers/scc.mjs';
 import { gitleaksProvider } from './providers/gitleaks.mjs';
 import { eslintProvider } from './providers/eslint.mjs';
 import { testsProvider } from './providers/tests.mjs';
+import { firebaseProvider } from './providers/firebase.mjs';
 import { isTestFile } from './ignore.mjs';
 import { discoverSourceDirs } from './discover.mjs';
+import { detectStack } from './stack.mjs';
 import { dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
@@ -71,7 +73,7 @@ export async function run(configPath, options) {
   const ctx = { repoRoot: options.repoRoot, targets, log };
 
   const { findings, skipped } = await runProviders(
-    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider],
+    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider],
     config,
     ctx,
   );
@@ -115,6 +117,7 @@ export async function run(configPath, options) {
     dependencies,
     skippedProviders: skipped,
     notStaticallyVerifiable: [],
+    stack: detectStack(options.repoRoot, targets),
     ...(calibration ? { calibration } : {}),
   });
 

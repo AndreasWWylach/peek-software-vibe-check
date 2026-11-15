@@ -110,6 +110,8 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │   ├── calibration.mjs        # self-report vs. scan overlay (quiz data)
 │   ├── catalog.mjs            # vendored teardown facts lookup
 │   ├── ignore.mjs             # shared path filters (junk dirs, env, test files)
+│   ├── discover.mjs           # source-directory discovery (auto-include targets)
+│   ├── stack.mjs              # scan-time stack markers (Firebase/Firestore/Prisma/…)
 │   ├── version.mjs            # engine name/version/commit
 │   ├── onboarding.mjs         # `vibe-check setup` installer logic
 │   └── providers/             # one module per analysis capability
@@ -119,7 +121,8 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │       ├── scc.mjs            # file size → TD-019
 │       ├── gitleaks.mjs       # secrets → TD-016
 │       ├── eslint.mjs         # language-linter hygiene (QA)
-│       └── tests.mjs          # test presence + assertion heuristic (QA)
+│       ├── tests.mjs          # test presence + assertion heuristic (QA)
+│       └── firebase.mjs       # Firestore/Storage security-rules boundary (QA → security)
 ├── schema/
 │   ├── peek-config.schema.json   # config contract (JSON Schema, versioned)
 │   └── peek-report.schema.json   # report contract (JSON Schema, versioned)
@@ -181,6 +184,7 @@ config ──▶ validate
         │     Madge (circular deps) · scc (file size)               ──▶ teardown findings
         │     Gitleaks (secrets)                                    ──▶ teardown findings
         │     ESLint (linter) · tests (presence/assertions)         ──▶ hygiene + QA findings
+        │     Firebase/Firestore (security rules)                    ──▶ teardown findings
         ──▶ dedup (same teardownId + file/line collapses)
         ──▶ map findings → pillar → points (dependency CVEs + test-file findings excluded from score)
         ──▶ score (reuse quiz constants) + tier
@@ -191,6 +195,12 @@ TD-008 tenant sharpening is automatic: the engine reads the scanned
 schema/model files, detects the tenant column(s) (`organizationId`,
 `workspaceId`, `tenant_id`, …), and materializes a precise rule. The intake
 never asks for the column name — a fact only the user's code knows.
+
+**Scan-time stack detection** is automatic too: the engine reads `firebase.json`,
+`package.json` dependencies, and `*.rules` files to know what the app is built
+on — never asked. Framework-specific rules (Firestore/Storage security rules,
+and later Prisma/Express) are gated on those markers, and the report opens with
+an App Stack summary. No per-service intake questions.
 
 ### 5.5 Ecosystem & language matrix
 
@@ -257,6 +267,11 @@ Two cross-cutting requirements:
 A pure-Node **`tests` provider** (no binary to install) is also in the core tier:
 it reports whether the repo has any test files, and flags test files with no
 assertion calls as a TD-017 ("hallucinated tests") heuristic — see §8.1.
+
+A pure-Node **`firebase` provider** likewise needs no binary: when the stack scan
+detects Firebase/Firestore it checks the security-rules boundary — missing
+`firestore.rules`, open `if true` rules, and rules that don't require
+`request.auth` (the Firestore flavor of TD-008).
 
 ### 5.8 Setup & onboarding (the installer)
 
@@ -397,6 +412,9 @@ Your dependencies carry **12 known CVE(s)**; the worst is critical `proxy-addr`
 ## Overall Risk
 - Your code: 142 / 350 — 🟡 Needs Hardening
 - Dependencies: 12 known CVE(s) — 1 critical, 6 high, 5 medium (reported separately)
+
+## App Stack
+Detected: Firebase (Firestore database, Cloud Functions) · React frontend · Stripe payments.
 
 ## Findings Summary
 | Check | Findings | What |

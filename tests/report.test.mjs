@@ -151,3 +151,39 @@ test('renderMarkdown reports test-file findings separately and unscored', () => 
   assert.ok(markdown.includes('## Findings in test files (not scored)'), markdown);
   assert.ok(markdown.includes('keys.test.ts'), markdown);
 });
+
+test('renderMarkdown renders a brief App Stack summary from detected markers', () => {
+  const report = {
+    engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
+    generatedAt: '2026-11-13T00:00:00.000Z',
+    riskScore: { total: 0, max: 350, tier: 'green', riskPercentage: 0 },
+    pillars: [],
+    findings: [],
+    dependencies: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+    skippedProviders: [],
+    notStaticallyVerifiable: [],
+    stack: { firebase: true, firestore: true, cloudFunctions: true, react: true, stripe: true },
+  };
+
+  const markdown = renderMarkdown(/** @type {any} */ (report));
+  assert.ok(markdown.includes('## App Stack'), markdown);
+  assert.ok(markdown.includes('Firestore database'), markdown);
+  assert.ok(markdown.includes('Cloud Functions'), markdown);
+  assert.ok(markdown.includes('Stripe payments'), markdown);
+});
+
+test('renderMarkdown omits the App Stack section when no markers were detected', () => {
+  const report = {
+    engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
+    generatedAt: '2026-11-13T00:00:00.000Z',
+    riskScore: { total: 0, max: 350, tier: 'green', riskPercentage: 0 },
+    pillars: [],
+    findings: [],
+    dependencies: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+    skippedProviders: [],
+    notStaticallyVerifiable: [],
+  };
+
+  const markdown = renderMarkdown(/** @type {any} */ (report));
+  assert.ok(!markdown.includes('## App Stack'), markdown);
+});

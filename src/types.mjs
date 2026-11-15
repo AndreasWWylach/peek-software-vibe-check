@@ -148,6 +148,7 @@
  * @property {SkipRecord[]} skippedProviders
  * @property {Array<{ teardownId: string; title: string; guidance: string }>} notStaticallyVerifiable
  * @property {Calibration | undefined} calibration — self-report vs scan (when quiz data present).
+ * @property {Record<string, boolean> | undefined} [stack] - scan-time stack markers (Firebase/Firestore/Prisma/…).
  */
 
 export {};
