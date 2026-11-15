@@ -19,6 +19,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { commandAvailable, runCommand } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
+import { isIgnoredDir, isVendoredPath } from '../ignore.mjs';
 import { materializeTenantRule, readTenantColumn, detectTenantColumns } from './tenant-rule.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
@@ -150,7 +151,10 @@ export const semgrepProvider = {
     if (!args.some((arg) => !arg.startsWith('--'))) return [];
 
     const stdout = runCommand('semgrep', args, { cwd: ctx.repoRoot });
-    return enrichFromCatalog(parseSemgrepJson(stdout, ctx.repoRoot));
+    const findings = parseSemgrepJson(stdout, ctx.repoRoot).filter(
+      (finding) => !isIgnoredDir(finding.file) && !isVendoredPath(finding.file),
+    );
+    return enrichFromCatalog(findings);
   },
 };
 

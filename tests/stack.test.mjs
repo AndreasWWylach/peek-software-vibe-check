@@ -70,3 +70,27 @@ test('findRulesFile sees rules at the repo root even when targets exclude it', (
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('detectStack reads composer.json require keys for PHP backends', () => {
+  const root = mkdtempSync(join(tmpdir(), 'vibe-check-stack-'));
+  try {
+    writeFileSync(
+      join(root, 'composer.json'),
+      JSON.stringify({
+        require: {
+          'pimcore/pimcore': '^11',
+          'symfony/framework-bundle': '^6.4',
+          'doctrine/orm': '^2',
+          'twig/twig': '^3',
+        },
+      }),
+    );
+    const stack = detectStack(root, [root]);
+    assert.equal(stack.pimcore, true);
+    assert.equal(stack.symfony, true);
+    assert.equal(stack.doctrine, true);
+    assert.equal(stack.twig, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -35,6 +35,17 @@ const DEP_MARKERS = /** @type {Record<string, string>} */ (
   })
 );
 
+/** composer.json `require`/`require-dev` name → stack marker (PHP backends). */
+const COMPOSER_MARKERS = /** @type {Record<string, string>} */ (
+  Object.freeze({
+    'pimcore/pimcore': 'pimcore',
+    'laravel/framework': 'laravel',
+    'doctrine/orm': 'doctrine',
+    'doctrine/dbal': 'doctrine',
+    'twig/twig': 'twig',
+  })
+);
+
 /** Source file extensions whose content is scanned for Firebase signals. */
 const SOURCE_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
 
@@ -72,6 +83,7 @@ export function scanRepo(repoRoot, targets) {
 
   if (existsSync(join(repoRoot, 'firebase.json'))) markers.add('firebase');
   readPackageJson(join(repoRoot, 'package.json'), markers);
+  readComposerJson(join(repoRoot, 'composer.json'), markers);
   // Rules files typically live at the repo root — outside any scan target.
   recordRootRules('firestore.rules', repoRoot, markers, rulesFiles);
   recordRootRules('storage.rules', repoRoot, markers, rulesFiles);
@@ -140,6 +152,8 @@ function walk(dir, repoRoot, markers, rulesFiles, state) {
     } else if (entry.isFile()) {
       if (entry.name === 'package.json') {
         readPackageJson(abs, markers);
+      } else if (entry.name === 'composer.json') {
+        readComposerJson(abs, markers);
       } else if (entry.name === 'firestore.rules') {
         markers.add('firestore');
         recordFile(rulesFiles, entry.name, abs, repoRoot);
@@ -223,6 +237,35 @@ function readPackageJson(file, markers) {
     if (marker) markers.add(marker);
     // The Admin SDK is the server-side path to Firestore — strong enough signal.
     if (name === 'firebase-admin') markers.add('firestore');
+  }
+}
+
+/**
+ * Read a composer.json and add markers for its `require`/`require-dev` packages
+ * (Symfony/Pimcore/Doctrine/Twig/Laravel detection).
+ * @param {string} file
+ * @param {Set<string>} markers
+ */
+function readComposerJson(file, markers) {
+  let text = '';
+  try {
+    text = readFileSync(file, 'utf8');
+  } catch {
+    return;
+  }
+  /** @type {Record<string, unknown>} */
+  let pkg;
+  try {
+    pkg = JSON.parse(text);
+  } catch {
+    return;
+  }
+  const deps = { ...(pkg.require ?? {}), ...(pkg['require-dev'] ?? {}) };
+  for (const name of Object.keys(deps)) {
+    if (name.startsWith('symfony/')) markers.add('symfony');
+    if (name.startsWith('twig/')) markers.add('twig');
+    const marker = COMPOSER_MARKERS[name];
+    if (marker) markers.add(marker);
   }
 }
 

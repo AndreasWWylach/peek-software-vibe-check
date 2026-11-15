@@ -19,6 +19,10 @@ rules:
       - pattern-either:
           - pattern: 'shell_exec($CMD)'
           - pattern: 'system($CMD)'
+      # Only the provable inline-interpolation case: a multi-token command
+      # string that interpolates a variable, and is NOT escapeshellarg()-escaped.
+      # Pattern mode cannot prove whether a bare `$command` variable was built
+      # safely on an earlier line, so those are left to taint-mode tools.
       - metavariable-regex:
           metavariable: $CMD
-          regex: '.*\$[A-Za-z_].*'
+          regex: '(?!.*escapeshellarg).*\$\w+.*\s+.*'

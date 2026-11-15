@@ -93,7 +93,11 @@ export async function run(configPath, options) {
   }
   // Dependency CVEs score separately: "upgrade this package" is not the same
   // remediation as "rewrite this code", and the quiz has no dependency axis.
-  const codeFindings = sorted.filter((finding) => finding.kind !== 'dependency' && !finding.inTests);
+  // Advisory findings (e.g. a secret in a conventional config file) are flagged
+  // but not scored — the team's config-placement choice is not a code defect.
+  const codeFindings = sorted.filter(
+    (finding) => finding.kind !== 'dependency' && !finding.inTests && !finding.advisory,
+  );
   const scores = computeScores(codeFindings);
   const dependencies = summarizeDependencies(sorted);
 

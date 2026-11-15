@@ -16,6 +16,7 @@
  * `database_specific.severity` word on the detailed vulnerability entries.
  */
 import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
@@ -36,6 +37,36 @@ const OSV_SEVERITY = /** @type {Record<string, Severity>} */ ({
 /** Ordinal severity rank, for keeping the highest. */
 const SEVERITY_ORDER = /** @type {Record<Severity, number>} */ ({ critical: 4, high: 3, medium: 2, low: 1 });
 
+/** Lockfile basenames to pick up at the repo root (outside the scan targets). */
+const ROOT_LOCKFILES = [
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'npm-shrinkwrap.json',
+  'composer.lock',
+  'requirements.txt',
+  'Pipfile.lock',
+  'poetry.lock',
+  'go.mod',
+  'go.sum',
+  'Cargo.lock',
+  'Gemfile.lock',
+  'pom.xml',
+  'build.gradle',
+];
+
+/**
+ * Absolute paths of lockfiles that sit directly at the repo root (outside the
+ * scan `targets`). osv-scanner would otherwise miss them when targets are a
+ * folder-derived subset.
+ * @param {string} repoRoot
+ * @returns {string[]}
+ */
+export function collectRootLockfiles(repoRoot) {
+  return ROOT_LOCKFILES.map((name) => join(repoRoot, name))
+    .filter((file) => existsSync(file));
+}
+
 /** @type {Provider} */
 export const osvProvider = {
   id: 'osv',
@@ -48,12 +79,16 @@ export const osvProvider = {
       ctx.log('  no existing targets — nothing to scan');
       return [];
     }
+    // Lockfiles almost always live at the repo root, which the config
+    // `targets` (source-scan hints) may exclude — scan them explicitly so a
+    // monorepo- or folder-derived target list can't silently skip CVEs.
+    const scanTargets = [...targets, ...collectRootLockfiles(ctx.repoRoot)];
     // `--allow-no-lockfiles` keeps a lockfile-less repo a 0-finding result
     // (not an error). osv-scanner exits non-zero when it FINDS vulns, so
     // capture stdout regardless of exit status.
     const { stdout } = runCommandCapture(
       'osv-scanner',
-      ['scan', 'source', '--format', 'json', '--allow-no-lockfiles', '-r', ...targets],
+      ['scan', 'source', '--format', 'json', '--allow-no-lockfiles', '-r', ...scanTargets],
       { cwd: ctx.repoRoot },
     );
     return parseOsvJson(stdout, ctx.repoRoot);

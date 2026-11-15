@@ -15,7 +15,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
-import { hasNonCodeExt, isEnvFile, isIgnoredDir } from '../ignore.mjs';
+import { hasNonCodeExt, isEnvFile, isIgnoredDir, isVendoredPath } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').RunContext} RunContext */
@@ -50,6 +50,56 @@ function isFirebaseWebConfig(file) {
   } catch {
     return false;
   }
+}
+
+/** Path segments that mark a file as server-side config, not browser code. */
+const SECRET_CONFIG_DIR_RE = /(^|\/)(config|environments|secrets)\//;
+
+/** Extensions that are configuration files — the framework's credential home. */
+const SECRET_CONFIG_EXT_RE = /\.(ya?ml|neon|ini)$/;
+
+/** Basenames that are secret config by convention (parameters.yaml, database.yaml). */
+const SECRET_CONFIG_NAME_RE = /(^|\/)(parameters|database)(\.[\w.-]+)?$/;
+
+/**
+ * Is this repo-relative path a conventional secret-config file? Symfony/Pimcore
+ * stores credentials in `parameters.yaml` / `database.yaml` / `config/` by
+ * design — a secret there is flagged as an advisory, never scored as a defect.
+ * @param {string} repoFile
+ * @returns {boolean}
+ */
+export function isSecretConfigFile(repoFile) {
+  const normalized = repoFile.replace(/\\/g, '/').toLowerCase();
+  return (
+    SECRET_CONFIG_DIR_RE.test(normalized) ||
+    SECRET_CONFIG_EXT_RE.test(normalized) ||
+    SECRET_CONFIG_NAME_RE.test(normalized)
+  );
+}
+
+/** Paths that clearly run server-side (never shipped to the browser). */
+const SERVER_DIR_RE = /(^|\/)(server|backend|functions|api|config|environments|secrets|infra|deploy)\//;
+
+/** Web-root prefixes whose contents ship to end users. */
+const CLIENT_PATH_RE = /(^|\/)(public|frontend|client|www|static|assets|dist)\//;
+
+/** Extensions that are client code (served to the browser). */
+const CLIENT_EXTS = new Set([
+  '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.html', '.htm', '.vue', '.svelte',
+]);
+
+/**
+ * Is this repo-relative path client-exposed (shipped to the browser)? A secret
+ * there is the TD-016 flaw — the key reaches end users.
+ * @param {string} repoFile
+ * @returns {boolean}
+ */
+function isClientExposed(repoFile) {
+  const normalized = repoFile.replace(/\\/g, '/').toLowerCase();
+  const dot = normalized.lastIndexOf('.');
+  const ext = dot === -1 ? '' : normalized.slice(dot);
+  if (SERVER_DIR_RE.test(normalized)) return false;
+  return CLIENT_PATH_RE.test(normalized) || CLIENT_EXTS.has(ext);
 }
 
 /** Fallbacks when the vendored catalog does not yet carry TD-016. */
@@ -93,10 +143,15 @@ export const gitleaksProvider = {
         // Relativize first: gitleaks echoes the absolute `--source` path, and
         // the ignore guards are segment-based on repo-relative paths.
         const repoFile = repoRelative(leak.file, ctx.repoRoot);
-        // Skip junk dirs (node_modules, dist, …), the local `.env` secret
-        // store, and data/docs files (JSON samples, Markdown) — the latter two
-        // are not "hardcoded secret in client code" (TD-016's premise).
-        if (isIgnoredDir(repoFile) || isEnvFile(repoFile) || hasNonCodeExt(repoFile)) {
+        // Skip junk dirs (node_modules, dist, …), vendored assets, the local
+        // `.env` secret store, and data/docs files (JSON samples, Markdown) —
+        // the latter two are not "hardcoded secret in client code".
+        if (
+          isIgnoredDir(repoFile) ||
+          isVendoredPath(repoFile) ||
+          isEnvFile(repoFile) ||
+          hasNonCodeExt(repoFile)
+        ) {
           skipped += 1;
           continue;
         }
@@ -143,7 +198,7 @@ export function parseGitleaksJson(stdout) {
 }
 
 /**
- * Build a TD-016 finding from a parsed leak (no secret value).
+ * Build a finding from a parsed leak (no secret value).
  * @param {{ ruleId: string; description: string; file: string; line: number }} leak
  * @param {string} repoRoot
  * @param {TeardownFact | undefined} fact — catalog facts, when vendored.
@@ -152,18 +207,46 @@ export function parseGitleaksJson(stdout) {
 function toFinding(leak, repoRoot, fact) {
   const repoFile = repoRelative(leak.file, repoRoot);
   const line = leak.line > 0 ? leak.line : null;
+  const ruleId = leak.ruleId || 'unknown';
+
+  // A secret in a conventional config file (parameters.yaml / database.yaml /
+  // config/) is the framework's documented placement — flag it as an advisory,
+  // never score it as a code defect.
+  if (isSecretConfigFile(repoFile)) {
+    return {
+      id: `gitleaks:${repoFile}:${line ?? 0}:${ruleId}`,
+      kind: 'hygiene',
+      file: repoFile,
+      line,
+      column: null,
+      severity: 'low',
+      pillar: 'security',
+      teardownId: null,
+      advisory: true,
+      title: 'Committed secret in config',
+      message: leak.description || null,
+      fixSummary:
+        'Conventional secret placement — ensure the repo stays private (or gitignore this file) and rotate the value if the repo was ever public.',
+      source: { provider: 'gitleaks', ruleId: leak.ruleId },
+      dependency: null,
+    };
+  }
+
+  const clientExposed = isClientExposed(repoFile);
   return {
-    id: `gitleaks:${repoFile}:${line ?? 0}:${leak.ruleId}`,
+    id: `gitleaks:${repoFile}:${line ?? 0}:${ruleId}`,
     kind: 'teardown',
     file: repoFile,
     line,
     column: null,
-    severity: fact?.severity ?? DEFAULTS.severity,
+    severity: clientExposed ? fact?.severity ?? DEFAULTS.severity : 'high',
     pillar: fact?.pillar ?? DEFAULTS.pillar,
     teardownId: TEARDOWN_ID,
-    title: `Hardcoded secret (${leak.ruleId || 'unknown'})`,
+    title: `Hardcoded secret (${ruleId})`,
     message: leak.description || null,
-    fixSummary: fact?.fixSummary ?? DEFAULTS.fixSummary,
+    fixSummary: clientExposed
+      ? fact?.fixSummary ?? DEFAULTS.fixSummary
+      : 'Move the value to a server-side environment variable or secrets manager and rotate it — it is committed to git history.',
     source: { provider: 'gitleaks', ruleId: leak.ruleId },
     dependency: null,
   };

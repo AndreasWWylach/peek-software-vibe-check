@@ -58,6 +58,9 @@
  * @property {DependencyInfo | null} dependency — populated for dependency findings.
  * @property {boolean} [inTests] - true when the finding lives in a test/fixture
  *   file (reported, but excluded from the risk score).
+ * @property {boolean} [advisory] - true when the finding is informational
+ *   (e.g. a committed secret in a conventional config file) — reported, but
+ *   excluded from the risk score.
  */
 
 /**

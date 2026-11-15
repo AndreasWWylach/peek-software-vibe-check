@@ -14,6 +14,7 @@ export const IGNORED_DIRS = new Set([
   'node_modules',
   '.git',
   '.cache',
+  '.phpstan',
   'dist',
   'build',
   '.next',
@@ -31,11 +32,30 @@ export const IGNORED_DIRS = new Set([
 
 /**
  * Does a repo-relative path sit under (or equal) an ignored directory?
- * @param {string} repoFile — repo-relative path, `/` or `\\` separators.
+ * @param {string} repoFile — repo-relative path, `/` or `\` separators.
  * @returns {boolean}
  */
 export function isIgnoredDir(repoFile) {
   return repoFile.split(/[\\/]/).some((segment) => IGNORED_DIRS.has(segment));
+}
+
+/**
+ * Repo-relative path prefixes that are vendored or published assets — never the
+ * app's own source. These are framework conventions, matched on the normalized
+ * path (NOT by segment, unlike `IGNORED_DIRS` — a root `bundles/` is the app's
+ * own code in Symfony, while `public/bundles/` is `assets:install` output).
+ */
+const VENDORED_PREFIXES = ['public/bundles/', 'public/resources/'];
+
+/**
+ * Is this repo-relative path a vendored/published asset (e.g. a third-party
+ * editor or admin UI committed under the web root)?
+ * @param {string} repoFile — repo-relative path, `/` or `\` separators.
+ * @returns {boolean}
+ */
+export function isVendoredPath(repoFile) {
+  const normalized = repoFile.replace(/\\/g, '/').toLowerCase();
+  return VENDORED_PREFIXES.some((prefix) => normalized.startsWith(prefix));
 }
 
 /**

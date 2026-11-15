@@ -11,8 +11,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { parseSemgrepJson } from '../src/providers/semgrep.mjs';
-import { parseOsvJson } from '../src/providers/osv.mjs';
+import { collectRootLockfiles, parseOsvJson } from '../src/providers/osv.mjs';
+import { isSecretConfigFile } from '../src/providers/gitleaks.mjs';
 import { parseMadgeJson } from '../src/providers/madge.mjs';
 import { parseSccJson } from '../src/providers/scc.mjs';
 import { parseGitleaksJson } from '../src/providers/gitleaks.mjs';
@@ -161,6 +165,32 @@ test('osv: defaults severity to medium when the scanner reports none', () => {
   const [finding] = parseOsvJson(output, '/repo');
   assert.equal(finding.severity, 'medium');
   assert.deepEqual(finding.dependency?.cveIds, ['CVE-2021-0000']);
+});
+
+test('collectRootLockfiles finds root lockfiles only (not arbitrary files)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'vibe-osv-'));
+  try {
+    writeFileSync(join(root, 'composer.lock'), '{}');
+    writeFileSync(join(root, 'package-lock.json'), '{}');
+    writeFileSync(join(root, 'README.md'), 'not a lockfile');
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src', 'app.php'), '<?php');
+
+    const found = collectRootLockfiles(root).map((file) => file.split('/').pop()).sort();
+    assert.deepEqual(found, ['composer.lock', 'package-lock.json']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('isSecretConfigFile flags conventional secret config locations', () => {
+  assert.equal(isSecretConfigFile('config/parameters.yaml'), true);
+  assert.equal(isSecretConfigFile('environments/dev/config/database.yaml'), true);
+  assert.equal(isSecretConfigFile('database.yaml'), true); // root-level convention
+  assert.equal(isSecretConfigFile('.github/workflows/ci.yml'), true); // yaml
+  assert.equal(isSecretConfigFile('src/Service/App.php'), false); // PHP is code, not config
+  assert.equal(isSecretConfigFile('src/keys.ts'), false); // client code
+  assert.equal(isSecretConfigFile('public/js/app.js'), false); // client code
 });
 
 test('madge: parses circular cycles into path arrays', () => {

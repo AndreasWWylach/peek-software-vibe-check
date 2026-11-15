@@ -49,7 +49,10 @@ export function renderMarkdown(report) {
   const { engine, generatedAt, riskScore, pillars, findings, skippedProviders, notStaticallyVerifiable, dependencies } = report;
   const dependencyFindings = findings.filter((finding) => finding.kind === 'dependency');
   const testFindings = findings.filter((finding) => finding.inTests === true);
-  const codeFindings = findings.filter((finding) => finding.kind !== 'dependency' && !finding.inTests);
+  const advisories = findings.filter((finding) => finding.advisory === true);
+  const codeFindings = findings.filter(
+    (finding) => finding.kind !== 'dependency' && !finding.inTests && !finding.advisory,
+  );
 
   /** @type {string[]} */
   const lines = [];
@@ -75,6 +78,9 @@ export function renderMarkdown(report) {
   lines.push('| Check | Findings | What |');
   lines.push('| --- | ---: | --- |');
   lines.push(...renderSummary(codeFindings, dependencies, testFindings));
+  if (advisories.length > 0) {
+    lines.push(`_${advisories.length} advisory finding(s) are reported below and are not scored._`);
+  }
   lines.push('');
 
   lines.push('## Pillar Breakdown');
@@ -125,6 +131,22 @@ export function renderMarkdown(report) {
     /** @type {string | null} */
     let currentPillar = null;
     for (const finding of testFindings) {
+      if (finding.pillar !== currentPillar) {
+        currentPillar = finding.pillar;
+        lines.push('');
+        lines.push(`### ${finding.pillar}`);
+      }
+      lines.push(formatFinding(finding));
+    }
+  }
+
+  if (advisories.length > 0) {
+    lines.push('');
+    lines.push('## Advisories (not scored)');
+    lines.push('_Informational — these do not affect the risk score. They are noted for awareness, not as defects._');
+    /** @type {string | null} */
+    let currentPillar = null;
+    for (const finding of advisories) {
       if (finding.pillar !== currentPillar) {
         currentPillar = finding.pillar;
         lines.push('');
@@ -190,6 +212,13 @@ function renderStack(stack) {
   }
   if (stack.prisma) parts.push('Prisma ORM');
   if (stack.express) parts.push('Express');
+
+  // PHP backends (composer.json markers).
+  if (stack.pimcore) parts.push('Pimcore (Symfony)');
+  else if (stack.laravel) parts.push('Laravel');
+  else if (stack.symfony) parts.push('Symfony');
+  if (stack.doctrine) parts.push('Doctrine ORM');
+  if (stack.twig) parts.push('Twig templates');
 
   const frontendBits = [];
   if (stack.next) frontendBits.push('Next.js');

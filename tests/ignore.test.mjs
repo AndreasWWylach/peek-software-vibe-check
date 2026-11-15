@@ -8,7 +8,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hasNonCodeExt, isEnvFile, isIgnoredDir, isTestFile } from '../src/ignore.mjs';
+import { hasNonCodeExt, isEnvFile, isIgnoredDir, isTestFile, isVendoredPath } from '../src/ignore.mjs';
 
 test('isIgnoredDir flags dependency/build/cache dirs anywhere in the path', () => {
   assert.equal(isIgnoredDir('node_modules/react/index.js'), true);
@@ -19,6 +19,15 @@ test('isIgnoredDir flags dependency/build/cache dirs anywhere in the path', () =
   assert.equal(isIgnoredDir('public/var/cache/dev/App_KernelDevDebugContainer.php'), true);
   assert.equal(isIgnoredDir('var/log/dev.log'), true);
   assert.equal(isIgnoredDir('src/var/Config.php'), true); // segment match, like node_modules
+  assert.equal(isIgnoredDir('.phpstan/cache/Container_abc.php'), true);
+});
+
+test('isVendoredPath flags published/vendored asset prefixes, not root dirs', () => {
+  assert.equal(isVendoredPath('public/bundles/tinymce/plugin.js'), true);
+  assert.equal(isVendoredPath('public/resources/tinymce/tinymce.js'), true);
+  // A root-level `bundles/` is the app's OWN code in Symfony — never vendored.
+  assert.equal(isVendoredPath('bundles/Acme/FooBundle/src/Bar.php'), false);
+  assert.equal(isVendoredPath('src/Controller/App.php'), false);
 });
 
 test('isEnvFile flags .env and .env.local but not source files', () => {

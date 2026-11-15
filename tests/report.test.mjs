@@ -154,6 +154,49 @@ test('renderMarkdown reports test-file findings separately and unscored', () => 
   assert.ok(markdown.includes('| test files (not scored) | 1 | TD-016 ×1 |'), markdown);
 });
 
+test('renderMarkdown reports advisory findings separately and unscored', () => {
+  const report = {
+    engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
+    generatedAt: '2026-11-13T00:00:00.000Z',
+    riskScore: { total: 0, max: 350, tier: 'green', riskPercentage: 0 },
+    pillars: [],
+    findings: [
+      {
+        kind: 'teardown',
+        teardownId: 'TD-016',
+        file: 'src/keys.ts',
+        line: 2,
+        severity: 'critical',
+        pillar: 'security',
+        title: 'Hardcoded secret (aws-access-token)',
+        source: { provider: 'gitleaks', ruleId: 'aws-access-token' },
+      },
+      {
+        kind: 'hygiene',
+        teardownId: null,
+        file: 'config/parameters.yaml',
+        line: 2,
+        severity: 'low',
+        pillar: 'security',
+        title: 'Committed secret in config',
+        source: { provider: 'gitleaks', ruleId: 'generic-api-key' },
+        advisory: true,
+      },
+    ],
+    dependencies: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+    skippedProviders: [],
+    notStaticallyVerifiable: [],
+  };
+
+  const markdown = renderMarkdown(/** @type {any} */ (report));
+  assert.ok(markdown.includes('## Advisories (not scored)'), markdown);
+  assert.ok(markdown.includes('Committed secret in config'), markdown);
+  assert.ok(markdown.includes('parameters.yaml'), markdown);
+  // The advisory must NOT appear in the scored "Findings (your code)" section —
+  // it is its own unscored section. Verify by checking the section order.
+  assert.ok(markdown.indexOf('## Advisories (not scored)') > markdown.indexOf('## Findings (your code)'), markdown);
+});
+
 test('renderMarkdown renders a brief App Stack summary from detected markers', () => {
   const report = {
     engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },

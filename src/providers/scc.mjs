@@ -14,7 +14,7 @@ import { existsSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import { commandAvailable, runCommand } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
-import { IGNORED_DIRS, NON_CODE_EXTS, isIgnoredDir } from '../ignore.mjs';
+import { IGNORED_DIRS, NON_CODE_EXTS, isIgnoredDir, isVendoredPath } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').ScanConfig} ScanConfig */
@@ -26,12 +26,6 @@ import { IGNORED_DIRS, NON_CODE_EXTS, isIgnoredDir } from '../ignore.mjs';
 
 /** The teardown this provider maps to (file-size metric → monolithic file). */
 const TEARDOWN_ID = 'TD-019';
-
-/**
- * Default size threshold in total lines (matches TD-019's "500+ lines").
- * Overridable per-app via `ruleParams.maxFileLines`.
- */
-const DEFAULT_MAX_FILE_LINES = 500;
 
 /** Fallbacks when the vendored catalog does not yet carry TD-019. */
 const DEFAULTS = {
@@ -74,6 +68,10 @@ export const sccProvider = {
   applicable: () => true,
   async run(config, ctx) {
     const threshold = readThreshold(config);
+    if (threshold === null) {
+      ctx.log('  TD-019 disabled (set ruleParams.maxFileLines to enable)');
+      return [];
+    }
     const targets = ctx.targets.filter((target) => existsSync(target));
     if (targets.length === 0) {
       ctx.log('  no existing targets — nothing to scan');
@@ -97,13 +95,16 @@ export const sccProvider = {
       for (const file of parseSccJson(stdout)) {
         // Only flag code-bearing files under the app's own source. Data files
         // (JSON, Markdown, caches) have `code === 0` and are not "monolithic
-        // code"; junk dirs (node_modules, dist, …) are excluded defensively;
+        // code"; junk dirs (node_modules, dist, …) and vendored assets
+        // (public/bundles, public/resources) are excluded defensively;
         // stylesheets/markup are excluded because TD-019 is about source code.
+        // The threshold is CODE lines, not total lines — docblock-heavy
+        // interfaces are large but not monolithic.
         if (file.code === 0) continue;
         const repoFile = repoRelative(file.location, ctx.repoRoot);
-        if (isIgnoredDir(repoFile)) continue;
+        if (isIgnoredDir(repoFile) || isVendoredPath(repoFile)) continue;
         if (!hasCodeExt(repoFile)) continue;
-        if (file.lines < threshold) continue;
+        if (file.code < threshold) continue;
         findings.push(toFinding(file, ctx.repoRoot, threshold, fact));
       }
     }
@@ -112,16 +113,18 @@ export const sccProvider = {
 };
 
 /**
- * Read the size threshold — `ruleParams.maxFileLines` when present, else 500.
+ * Read the size threshold — `ruleParams.maxFileLines`. Returns null when unset:
+ * the right line limit is project-specific (and unanswerable by the engine), so
+ * TD-019 is opt-in — no threshold, no monolithic-file findings.
  * @param {ScanConfig} config
- * @returns {number}
+ * @returns {number | null}
  */
 function readThreshold(config) {
   const value = config.ruleParams?.maxFileLines;
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
     return Math.floor(value);
   }
-  return DEFAULT_MAX_FILE_LINES;
+  return null;
 }
 
 /**
@@ -169,7 +172,7 @@ function toFinding(file, repoRoot, threshold, fact) {
     pillar: fact?.pillar ?? DEFAULTS.pillar,
     teardownId: TEARDOWN_ID,
     title: 'Monolithic file',
-    message: `${file.lines} lines (${file.code} of them code) — over the ${threshold}-line limit for a single file.`,
+    message: `${file.lines} lines (${file.code} of them code) — over the ${threshold}-code-line limit for a single file.`,
     fixSummary: fact?.fixSummary ?? DEFAULTS.fixSummary,
     source: { provider: 'scc', ruleId: 'monolithic-file' },
     dependency: null,
