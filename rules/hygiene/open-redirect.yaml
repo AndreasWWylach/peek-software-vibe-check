@@ -1,0 +1,57 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Always-on hygiene rule (LastMile "Hardener" framework): open redirect.
+# Pattern-mode only — flags redirects whose destination is read directly from
+# request input, the classic open-redirect shape.
+rules:
+  - id: peek-hygiene-open-redirect-js
+    languages:
+      - javascript
+      - typescript
+    severity: ERROR
+    message: Redirect destination taken from request input — open redirect.
+    metadata:
+      peek:
+        hygiene: true
+        ruleId: open-redirect
+        pillar: security
+        severity: high
+        title: Open redirect
+        fixSummary: Validate the redirect target against an allowlist of known-safe URLs.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '$RES.redirect($REQ.$X)'
+          - pattern: '$RES.redirect(301, $REQ.$X)'
+          - pattern: '$RES.redirect(302, $REQ.$X)'
+          - pattern: '$RES.redirect(307, $REQ.$X)'
+          - pattern: '$RES.redirect(308, $REQ.$X)'
+          - pattern: '$RES.location = $REQ.$X'
+
+  - id: peek-hygiene-open-redirect-py
+    languages:
+      - python
+    severity: ERROR
+    message: Redirect destination taken from request input — open redirect.
+    metadata:
+      peek:
+        hygiene: true
+        ruleId: open-redirect
+        pillar: security
+        severity: high
+        title: Open redirect
+        fixSummary: Validate the redirect target against an allowlist of known-safe URLs.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'redirect(request.args.get($X))'
+          - pattern: 'redirect(request.args[$X])'
+          - pattern: 'redirect(request.values.get($X))'
+          - pattern: 'redirect(request.values[$X])'
+          - pattern: 'redirect(request.form.get($X))'
+          - pattern: 'redirect(request.form[$X])'
+          - pattern: 'HttpResponseRedirect(request.GET.get($X))'
+          - pattern: 'HttpResponseRedirect(request.GET[$X])'
+          - pattern: 'HttpResponseRedirect(request.POST.get($X))'
+          - pattern: 'HttpResponseRedirect(request.POST[$X])'

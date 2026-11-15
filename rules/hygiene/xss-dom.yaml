@@ -1,0 +1,76 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Always-on hygiene rules (LastMile "Hardener" framework). These are pattern-mode
+# signals — they flag the unconditionally-dangerous sinks, not tainted dataflow.
+# `metadata.peek.hygiene = true` maps results to `kind: 'hygiene'` findings.
+rules:
+  # React's explicitly-dangerous escape hatch. Using it at all is a conscious
+  # opt-out of escaping, so it is always worth flagging (near-zero false positives).
+  - id: peek-hygiene-xss-dangerously-set-html
+    languages:
+      - javascript
+      - typescript
+    severity: ERROR
+    message: dangerouslySetInnerHTML renders raw HTML without escaping — sanitize untrusted HTML before use.
+    metadata:
+      peek:
+        hygiene: true
+        ruleId: xss-dangerously-set-html
+        pillar: security
+        severity: high
+        title: XSS — dangerouslySetInnerHTML renders unsanitized HTML
+        fixSummary: Sanitize the HTML (e.g. DOMPurify) or render via React children instead of dangerouslySetInnerHTML.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '<$TAG dangerouslySetInnerHTML={{__html: $X}} />'
+          - pattern: '<$TAG dangerouslySetInnerHTML={{__html: $X}}></$TAG>'
+
+  # Obsolete / unsafe DOM-write APIs. Flagged whenever used.
+  - id: peek-hygiene-xss-dom-write
+    languages:
+      - javascript
+      - typescript
+    severity: ERROR
+    message: document.write / insertAdjacentHTML inject raw HTML — avoid with untrusted data.
+    metadata:
+      peek:
+        hygiene: true
+        ruleId: xss-dom-write
+        pillar: security
+        severity: medium
+        title: XSS — raw HTML injected into the DOM
+        fixSummary: Avoid document.write() and insertAdjacentHTML(); build the DOM with textContent or a sanitizing renderer.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'document.write($X)'
+          - pattern: '$ELEM.insertAdjacentHTML($POS, $X)'
+
+  # innerHTML/outerHTML assignment of a non-literal (i.e. variable / template)
+  # value. Static string literals are excluded — they carry no untrusted input.
+  - id: peek-hygiene-xss-inner-html
+    languages:
+      - javascript
+      - typescript
+    severity: ERROR
+    message: innerHTML/outerHTML assigned a non-literal value — potential XSS if the value is untrusted.
+    metadata:
+      peek:
+        hygiene: true
+        ruleId: xss-inner-html
+        pillar: security
+        severity: medium
+        title: XSS — innerHTML assigned non-literal data
+        fixSummary: Escape or sanitize (e.g. DOMPurify) the value, or assign it via textContent instead.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '$ELEM.innerHTML = $X'
+          - pattern: '$ELEM.outerHTML = $X'
+      # Fire only when the assigned value is not a plain string literal (which
+      # cannot carry untrusted input at runtime).
+      - metavariable-regex:
+          metavariable: $X
+          regex: '(?!"|\x27).*'

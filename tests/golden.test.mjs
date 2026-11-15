@@ -63,6 +63,9 @@ function scanFixtures(ruleDir, fixturePaths) {
 for (const entry of readdirSync(FIXTURES_ROOT)) {
   const fixtureDir = join(FIXTURES_ROOT, entry);
   if (!statSync(fixtureDir).isDirectory()) continue;
+  // `hygiene/` fixtures are always-on rules, not teardown facts — they have
+  // their own golden harness (tests/hygiene-golden.test.mjs).
+  if (entry === 'hygiene') continue;
 
   const tdId = entry.toUpperCase(); // td-002 → TD-002
   const ruleDir = join(RULES_ROOT, tdId);

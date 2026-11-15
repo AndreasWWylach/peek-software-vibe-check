@@ -1,0 +1,45 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Always-on hygiene rule (LastMile "Hardener" framework): dynamic code execution.
+# Flags the explicit eval/exec/Function constructs — the canonical sinks for
+# arbitrary-code execution and code injection.
+rules:
+  - id: peek-hygiene-eval-js
+    languages:
+      - javascript
+      - typescript
+    severity: ERROR
+    message: eval() / new Function() execute arbitrary code — avoid dynamic code execution.
+    metadata:
+      peek:
+        hygiene: true
+        ruleId: eval
+        pillar: security
+        severity: high
+        title: Dynamic code execution (eval)
+        fixSummary: Replace eval()/new Function() with a safe parser or explicit logic.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'eval($X)'
+          - pattern: 'new Function($...ARGS)'
+
+  - id: peek-hygiene-eval-py
+    languages:
+      - python
+    severity: ERROR
+    message: eval()/exec() execute arbitrary code — avoid dynamic code execution.
+    metadata:
+      peek:
+        hygiene: true
+        ruleId: eval
+        pillar: security
+        severity: high
+        title: Dynamic code execution (eval)
+        fixSummary: Replace eval()/exec() with a safe parser or explicit logic.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'eval($X)'
+          - pattern: 'exec($X)'

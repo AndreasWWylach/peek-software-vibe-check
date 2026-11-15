@@ -3,13 +3,19 @@
 
 // @ts-check
 /**
- * @fileoverview Semgrep provider — runs the engine's custom `rules/peek/**` rules.
+ * @fileoverview Semgrep provider — runs the engine's custom `rules/peek/**`
+ * (teardown) and `rules/hygiene/**` (always-on hygiene) rules.
  *
  * Rule enablement = the TD is enabled in the config AND a rule variant exists
  * for a detected language (the intersection described in docs §5.5). Each rule
  * carries `metadata.peek` ({ teardownId, pillar, severity, fixSummary }) so the
  * provider can map results to findings without re-reading the catalog; the
  * catalog still enriches `fixSummary` when a fact is vendored.
+ *
+ * Hygiene rules are always-on hardening checks mapped from the LastMile
+ * framework. They carry `metadata.peek.hygiene = true` (with `ruleId`, `pillar`,
+ * `severity`, `title`, `fixSummary`) and produce `kind: 'hygiene'` findings with
+ * `teardownId = null` — they are scored, but tied to no single teardown fact.
  *
  * With zero vendored rules (Phase 1) this provider discovers nothing and
  * returns no findings.
@@ -31,6 +37,8 @@ import { materializeTenantRule, readTenantColumn, detectTenantColumns } from './
 
 /** Absolute path to the custom rules root (`rules/peek/<TD-id>/<lang>.yaml`). */
 const RULES_ROOT = fileURLToPath(new URL('../../rules/peek', import.meta.url));
+/** Absolute path to the always-on hygiene rules root (`rules/hygiene/*.yaml`). */
+const HYGIENE_ROOT = fileURLToPath(new URL('../../rules/hygiene', import.meta.url));
 
 /** Map Semgrep's severity strings to our shared severity enum (fallback only). */
 const SEMGREP_SEVERITY = /** @type {Record<string, Severity>} */ ({
@@ -72,6 +80,28 @@ function discoverRules(config) {
 }
 
 /**
+ * Discover always-on hygiene rule files for the config's detected languages.
+ * @param {ScanConfig} config
+ * @returns {string[]} absolute paths to `.yaml` rule files (sorted, deterministic).
+ */
+function discoverHygieneRules(config) {
+  if (!existsSync(HYGIENE_ROOT)) return [];
+
+  const languages = new Set(config.languages.map((language) => language.toLowerCase()));
+  /** @type {string[]} */
+  const files = [];
+
+  for (const file of readdirSync(HYGIENE_ROOT)) {
+    if (!file.endsWith('.yaml')) continue;
+    const declared = declaredLanguages(join(HYGIENE_ROOT, file));
+    if (languages.size === 0 || declared.some((lang) => languages.has(lang))) {
+      files.push(join(HYGIENE_ROOT, file));
+    }
+  }
+  return files.sort();
+}
+
+/**
  * The languages a rule file declares across all of its `languages:` blocks.
  * Falls back to the file name (e.g. `typescript.yaml`) when no block is found.
  * @param {string} file
@@ -100,6 +130,7 @@ export const semgrepProvider = {
   applicable: () => true,
   async run(config, ctx) {
     let ruleFiles = discoverRules(config);
+    const hygieneFiles = discoverHygieneRules(config);
 
     // TD-008 tenant sharpening: use the config's explicit tenant column when
     // present, else AUTO-DETECT the column(s) from the scanned schema/models.
@@ -124,14 +155,14 @@ export const semgrepProvider = {
       ctx.log(`  TD-008 tenant scope: ${tenantColumns.join(', ')}${explicitColumn ? '' : ' (auto-detected)'}`);
     }
 
-    if (ruleFiles.length === 0) {
+    if (ruleFiles.length === 0 && hygieneFiles.length === 0) {
       ctx.log('  no enabled rules with matching variants — nothing to scan');
       return [];
     }
 
     /** @type {string[]} */
     const args = [];
-    for (const file of ruleFiles) {
+    for (const file of [...ruleFiles, ...hygieneFiles]) {
       args.push('--config', file);
     }
     // `--no-git-ignore` makes semgrep scan exactly the targeted paths — it
@@ -183,6 +214,7 @@ function toFinding(result, repoRoot) {
   const peek = /** @type {Record<string, any>} */ (metadata.peek ?? {});
 
   const teardownId = typeof peek.teardownId === 'string' ? peek.teardownId : null;
+  const hygiene = peek.hygiene === true;
   const severity = /** @type {Severity} */ (
     peek.severity ?? SEMGREP_SEVERITY[String(extra.severity ?? 'INFO')] ?? 'low'
   );
@@ -198,19 +230,24 @@ function toFinding(result, repoRoot) {
   const title = typeof peek.title === 'string' ? peek.title : String(extra.message ?? checkId);
   const fixSummary = typeof peek.fixSummary === 'string' ? peek.fixSummary : null;
 
+  // Hygiene rules carry `metadata.peek.hygiene = true` and `ruleId` instead of a
+  // `teardownId`; they map to `kind: 'hygiene'` findings (scored, no catalog fact).
+  const sourceRuleId = hygiene ? String(peek.ruleId ?? checkId) : checkId;
+  const findingId = `${hygiene ? sourceRuleId : (teardownId ?? checkId)}:${file}:${line ?? 0}:${column ?? 0}`;
+
   return {
-    id: `${teardownId ?? checkId}:${file}:${line ?? 0}:${column ?? 0}`,
-    kind: 'teardown',
+    id: findingId,
+    kind: hygiene ? 'hygiene' : 'teardown',
     file,
     line,
     column,
     severity,
     pillar,
-    teardownId,
+    teardownId: hygiene ? null : teardownId,
     title,
     message: typeof extra.message === 'string' ? extra.message : null,
     fixSummary,
-    source: { provider: 'semgrep', ruleId: checkId },
+    source: { provider: 'semgrep', ruleId: sourceRuleId },
     dependency: null,
   };
 }
