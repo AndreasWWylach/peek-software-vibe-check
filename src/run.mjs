@@ -22,6 +22,7 @@ import { gitleaksProvider } from './providers/gitleaks.mjs';
 import { eslintProvider } from './providers/eslint.mjs';
 import { testsProvider } from './providers/tests.mjs';
 import { firebaseProvider } from './providers/firebase.mjs';
+import { depsProvider } from './providers/deps.mjs';
 import { isTestFile } from './ignore.mjs';
 import { discoverSourceDirs } from './discover.mjs';
 import { detectStack } from './stack.mjs';
@@ -73,7 +74,7 @@ export async function run(configPath, options) {
   const ctx = { repoRoot: options.repoRoot, targets, log };
 
   const { findings, skipped } = await runProviders(
-    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider],
+    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider, depsProvider],
     config,
     ctx,
   );

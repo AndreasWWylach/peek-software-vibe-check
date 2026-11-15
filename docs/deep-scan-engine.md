@@ -1,7 +1,7 @@
 # peek.software — Deep Scan Engine (Working Draft)
 
 > **Status:** IMPLEMENTED — shipped and scanning real repos; §1–§8 are the current design, §9–§10 are historical (phases done / decisions closed).
-> **Last updated:** 2026-11-14
+> **Last updated:** 2026-11-15
 > **Scope:** the open-source, local "post-diagnosis" scanner that turns Peek's teardown catalog into an executable audit.
 
 ---
@@ -115,11 +115,12 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │   ├── version.mjs            # engine name/version/commit
 │   ├── onboarding.mjs         # `vibe-check setup` installer logic
 │   └── providers/             # one module per analysis capability
-│       ├── semgrep.mjs        # custom teardown rules (rules/peek/*)
+│       ├── semgrep.mjs        # custom teardown rules (rules/peek/*) + always-on hygiene rules (rules/hygiene/*)
 │       ├── osv.mjs            # dependency CVEs (osv-scanner)
 │       ├── madge.mjs          # circular deps → TD-021
 │       ├── scc.mjs            # file size → TD-019
 │       ├── gitleaks.mjs       # secrets → TD-016
+│       ├── deps.mjs           # dependency hygiene: missing lockfile (scored) + floating versions (advisory)
 │       ├── eslint.mjs         # language-linter hygiene (QA)
 │       ├── tests.mjs          # test presence + assertion heuristic (QA)
 │       └── firebase.mjs       # Firestore/Storage security-rules boundary (QA → security)
@@ -127,7 +128,8 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │   ├── peek-config.schema.json   # config contract (JSON Schema, versioned)
 │   └── peek-report.schema.json   # report contract (JSON Schema, versioned)
 ├── rules/
-│   └── peek/<TD-id>/<lang>.yaml  # custom Semgrep rules — one per (TD × language)
+│   ├── peek/<TD-id>/<lang>.yaml  # custom Semgrep rules — one per (TD × language)
+│   └── hygiene/*.yaml            # always-on LastMile hardening rules (XSS / open redirect / eval)
 ├── catalog/
 │   └── teardowns.json         # VENDORED facts snapshot (id/pillar/severity/points/fixSummary/languages)
 ├── tests/
@@ -179,10 +181,11 @@ the `quiz` block only when answers exist.
 ```
 config ──▶ validate
         ──▶ providers (registry §5.7):
-        │     Semgrep (rules/peek/*.yaml filtered by enabledRules) ──▶ teardown findings
+        │     Semgrep (rules/peek/*.yaml + always-on rules/hygiene/*.yaml) ──▶ teardown + hygiene findings
         │     OSV-Scanner (lockfiles)                              ──▶ dependency findings
         │     Madge (circular deps) · scc (file size)               ──▶ teardown findings
         │     Gitleaks (secrets)                                    ──▶ teardown findings
+        │     deps (missing lockfile · floating versions)           ──▶ hygiene findings
         │     ESLint (linter) · tests (presence/assertions)         ──▶ hygiene + QA findings
         │     Firebase/Firestore (security rules)                    ──▶ teardown findings
         ──▶ dedup (same teardownId + file/line collapses)
@@ -279,6 +282,14 @@ directly), open `if true` rules, rules that don't require `request.auth`, and a
 low-severity heuristic flagging Cloud Function `onCall`/`onRequest` handlers with
 no visible auth check.
 
+A pure-Node **`deps` provider** (no binary) reads the repo's package manifests
+(`package.json`, `composer.json`, `requirements.txt`, `Gemfile`, `Pipfile`,
+`pyproject.toml`, `Cargo.toml`, `go.mod`) and flags two facts: a manifest with no
+lockfile (scored, medium — builds aren't reproducible) and dependency
+declarations with floating versions (`*`, `latest`, `dev-*`, unbounded `>=`/`>` —
+advisory, low; caret/tilde ranges are accepted as semver-bounded, and Composer
+platform requirements `php`/`ext-*`/`lib-*` are skipped).
+
 ### 5.8 Setup & onboarding (the installer)
 
 > **Terminology:** we call the setup experience **onboarding** — it is inviting,
@@ -329,6 +340,11 @@ Reuse the quiz's exact constants — already proven coherent:
   is not shipped, but a real key committed to a test file is still public in git
   and is flagged in its own report section.
 - Criticals impose a **hard floor** (e.g. any critical → tier cannot be green), so "readiness" stays truthful.
+- **Advisory findings are reported but not scored.** A finding carries an
+  `advisory` flag when it is a heuristic or policy signal rather than a proven
+  defect — a committed secret in a conventional config file, a dependency
+  declared with a floating version, a deprecated DOM-write API. The rule of
+  thumb: *deterministic defects score; heuristic/policy signals advise.*
 - **Not statically verifiable** TDs are reported as "see guide rule X", not silently scored as zero.
 
 ---
@@ -398,6 +414,25 @@ is env-inheritance — an agent dumping `process.env` (or a committed `.env`) to
 log. That's a Semgrep pattern (`console.log(process.env)`, committed `.env`), not
 entropy-based secret scanning. Tracked as a separate rule backlog item.
 
+### 7.5 Always-on hygiene rules (LastMile hardening)
+
+Beyond the teardown matrix, the engine ships an **always-on** hygiene rulepack
+(`rules/hygiene/*.yaml`) for the LastMile "Hardener" framework. These are
+language-gated (JS/TS + Python today), carry `metadata.peek.hygiene = true`, and
+map to `kind: 'hygiene'` findings with `teardownId: null`. The same golden-harness
+gate (§7.3) applies.
+
+| Rule | Sinks | Severity | Scored? |
+|---|---|---|---|
+| `xss-dangerously-set-html` | React `dangerouslySetInnerHTML` | high | scored |
+| `eval` | `eval` / `new Function` (JS), `eval`/`exec` (Py) | high | scored |
+| `open-redirect` | `res.redirect(req.*)` (Express), Flask/Django `redirect(request.*)` | high | scored |
+| `xss-dom-write` | `document.write` / `insertAdjacentHTML` | medium | **advisory** |
+
+`innerHTML = <variable>` is deliberately **not** a rule: it is idiomatic DOM code
+and only taint mode can prove the value is attacker-controlled (it fired ~67
+times on a real Pimcore app — the same precision-over-volume deferral as TD-044).
+
 ---
 
 ## 8. Report output
@@ -449,6 +484,11 @@ committed to a test file is still public in git._
 ### security
 - **TD-016** (`src/keys.test.ts:3`): Hardcoded secret (aws-access-token)
   → see https://peek.software/teardowns/TD-016
+
+## Advisories (not scored)
+_Heuristic / policy signals — reported for awareness, never counted toward the score._
+### security
+- **xss-dom-write** (`public/js/app.js:2`): XSS — raw HTML injected into the DOM
 
 ## Not Statically Verifiable
 - TD-014 (prompt injection) — see guide rule 16

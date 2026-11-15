@@ -249,6 +249,9 @@ function toFinding(result, repoRoot) {
     fixSummary,
     source: { provider: 'semgrep', ruleId: sourceRuleId },
     dependency: null,
+    // A rule may opt in to advisory (report-but-don't-score) via `peek.advisory`
+    // — used for weak hygiene signals that are policy judgments, not defects.
+    advisory: peek.advisory === true,
   };
 }
 

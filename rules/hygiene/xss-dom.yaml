@@ -4,6 +4,12 @@
 # Always-on hygiene rules (LastMile "Hardener" framework). These are pattern-mode
 # signals — they flag the unconditionally-dangerous sinks, not tainted dataflow.
 # `metadata.peek.hygiene = true` maps results to `kind: 'hygiene'` findings.
+#
+# `innerHTML = <variable>` is deliberately NOT flagged: assigning a non-literal
+# to innerHTML/outerHTML is idiomatic DOM code, and only a taint engine can tell
+# whether the value is attacker-controlled. A pattern-mode rule fired ~67 times
+# on one real Pimcore app (precision-over-volume violation) — deferred to taint
+# mode (docs §7.4, same reasoning as TD-044).
 rules:
   # React's explicitly-dangerous escape hatch. Using it at all is a conscious
   # opt-out of escaping, so it is always worth flagging (near-zero false positives).
@@ -27,7 +33,8 @@ rules:
           - pattern: '<$TAG dangerouslySetInnerHTML={{__html: $X}} />'
           - pattern: '<$TAG dangerouslySetInnerHTML={{__html: $X}}></$TAG>'
 
-  # Obsolete / unsafe DOM-write APIs. Flagged whenever used.
+  # Obsolete / unsafe DOM-write APIs. Flagged whenever used (advisory: whether
+  # the data is attacker-controlled needs taint — report, don't score).
   - id: peek-hygiene-xss-dom-write
     languages:
       - javascript
@@ -40,6 +47,7 @@ rules:
         ruleId: xss-dom-write
         pillar: security
         severity: medium
+        advisory: true
         title: XSS — raw HTML injected into the DOM
         fixSummary: Avoid document.write() and insertAdjacentHTML(); build the DOM with textContent or a sanitizing renderer.
       category: security
@@ -47,30 +55,3 @@ rules:
       - pattern-either:
           - pattern: 'document.write($X)'
           - pattern: '$ELEM.insertAdjacentHTML($POS, $X)'
-
-  # innerHTML/outerHTML assignment of a non-literal (i.e. variable / template)
-  # value. Static string literals are excluded — they carry no untrusted input.
-  - id: peek-hygiene-xss-inner-html
-    languages:
-      - javascript
-      - typescript
-    severity: ERROR
-    message: innerHTML/outerHTML assigned a non-literal value — potential XSS if the value is untrusted.
-    metadata:
-      peek:
-        hygiene: true
-        ruleId: xss-inner-html
-        pillar: security
-        severity: medium
-        title: XSS — innerHTML assigned non-literal data
-        fixSummary: Escape or sanitize (e.g. DOMPurify) the value, or assign it via textContent instead.
-      category: security
-    patterns:
-      - pattern-either:
-          - pattern: '$ELEM.innerHTML = $X'
-          - pattern: '$ELEM.outerHTML = $X'
-      # Fire only when the assigned value is not a plain string literal (which
-      # cannot carry untrusted input at runtime).
-      - metavariable-regex:
-          metavariable: $X
-          regex: '(?!"|\x27).*'
