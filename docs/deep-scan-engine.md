@@ -198,9 +198,13 @@ never asks for the column name — a fact only the user's code knows.
 
 **Scan-time stack detection** is automatic too: the engine reads `firebase.json`,
 `package.json` dependencies, and `*.rules` files to know what the app is built
-on — never asked. Framework-specific rules (Firestore/Storage security rules,
-and later Prisma/Express) are gated on those markers, and the report opens with
-an App Stack summary. No per-service intake questions.
+on — never asked. `firebase.json`, the root `package.json`, and root-level
+`firestore.rules` / `storage.rules` are read directly from the repo root,
+independent of the config `targets` (which are only a hint for source scanning),
+so Firebase/Firestore is detected even when the manifest intake didn't list the
+repo root. Framework-specific rules (Firestore/Storage security rules, and later
+Prisma/Express) are gated on those markers, and the report opens with an App
+Stack summary. No per-service intake questions.
 
 ### 5.5 Ecosystem & language matrix
 
