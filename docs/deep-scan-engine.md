@@ -81,7 +81,7 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 
 1. **Facet-gated rule subset** (objective, from manifest intake) — build first.
 2. **Quiz-weighted emphasis** — user hotspots influence scoring/report ordering; report shows the calibration moment: *"you answered Q2.2 'we cap tokens' → scan found TD-002."* This is where self-report becomes verifiable.
-3. **Rule parameters** — tenant column name, LLM SDK (openai/anthropic), ORM flavor. Highest value, hardest (rules must be parameterizable); defer to v2.
+3. **Rule parameters** — tenant column name, LLM SDK (openai/anthropic), ORM flavor. Highest value, hardest (rules must be parameterizable); defer to v2. The tenant column is **auto-detected** from the scanned schema/models (see §5.4); the config may still carry an explicit `tenantColumn` as a manual override.
 
 ---
 
@@ -153,7 +153,7 @@ A new backend endpoint (e.g. `POST /api/generate-scan-config`) that takes quiz a
   "targets": ["src/", "backend/"],          // derived from manifest
   "languages": ["typescript", "python"],
   "enabledRules": ["TD-002", "TD-008", ...], // facet-gated subset
-  "ruleParams": { "tenantColumn": null },     // v2
+  "ruleParams": { "tenantColumn": null },     // optional manual override — the engine auto-detects it
   "scoring": { "weights": { "security": 1.0, "runtime": 1.0, "architecture": 1.0, "qa": 1.0 } },
   "quiz": {                                   // for the calibration overlay (v2)
     "totalScore": 142,
@@ -186,6 +186,11 @@ config ──▶ validate
         ──▶ score (reuse quiz constants) + tier
         ──▶ render AUDIT-REPORT.md + peek-report.json
 ```
+
+TD-008 tenant sharpening is automatic: the engine reads the scanned
+schema/model files, detects the tenant column(s) (`organizationId`,
+`workspaceId`, `tenant_id`, …), and materializes a precise rule. The intake
+never asks for the column name — a fact only the user's code knows.
 
 ### 5.5 Ecosystem & language matrix
 

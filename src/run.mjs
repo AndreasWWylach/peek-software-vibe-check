@@ -22,6 +22,7 @@ import { gitleaksProvider } from './providers/gitleaks.mjs';
 import { eslintProvider } from './providers/eslint.mjs';
 import { testsProvider } from './providers/tests.mjs';
 import { isTestFile } from './ignore.mjs';
+import { discoverSourceDirs } from './discover.mjs';
 import { dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
@@ -51,7 +52,20 @@ export async function run(configPath, options) {
   log(`${ENGINE_NAME} ${ENGINE_VERSION} — local deep scan`);
   log(`config: ${configPath}`);
 
-  const targets = config.targets.map((target) => resolve(options.repoRoot, target));
+  // `targets` are a hint from the manifest intake — but the upload may miss
+  // whole folders (e.g. `shared/`). The engine runs on the full repo, so it
+  // auto-includes any top-level directory containing source code of the
+  // configured languages. No silently unchecked code.
+  const configured = new Set(config.targets.map((target) => target.replace(/[/\\]+$/, '')));
+  const autoIncluded = discoverSourceDirs(options.repoRoot, config.languages)
+    .filter((dir) => !configured.has(dir.replace(/\/$/, '')));
+  if (autoIncluded.length > 0) {
+    log(`  auto-included source dir(s) not in config: ${autoIncluded.join(', ')}`);
+  }
+  const targets = [
+    ...config.targets.map((target) => resolve(options.repoRoot, target)),
+    ...autoIncluded.map((dir) => resolve(options.repoRoot, dir)),
+  ];
 
   /** @type {RunContext} */
   const ctx = { repoRoot: options.repoRoot, targets, log };

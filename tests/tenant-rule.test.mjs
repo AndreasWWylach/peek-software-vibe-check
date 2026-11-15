@@ -7,12 +7,13 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildTenantRuleYaml,
+  detectTenantColumns,
   materializeTenantRule,
   readTenantColumn,
   TENANT_COLUMN_RE,
@@ -47,6 +48,38 @@ test('buildTenantRuleYaml pins the configured column and its compound form', () 
   // The generic fallback columns must NOT leak into the parameterized rule.
   assert.ok(!yaml.includes('tenantId'));
   assert.ok(!yaml.includes('userId'));
+});
+
+test('buildTenantRuleYaml accepts multiple columns (auto-detected set)', () => {
+  const yaml = buildTenantRuleYaml(['organizationId', 'workspaceId']);
+  assert.ok(yaml.includes('organizationId'));
+  assert.ok(yaml.includes('workspaceId'));
+  assert.ok(yaml.includes('id_organizationId'));
+  assert.ok(yaml.includes('id_workspaceId'));
+  assert.ok(yaml.includes('expected one of: organizationId, workspaceId'));
+});
+
+test('detectTenantColumns finds tenant columns and ignores user/client ids', () => {
+  const root = mkdtempSync(join(tmpdir(), 'vibe-check-tenant-detect-'));
+  try {
+    mkdirSync(join(root, 'prisma'), { recursive: true });
+    writeFileSync(
+      join(root, 'prisma', 'schema.prisma'),
+      'model Project {\n  id String @id\n  organizationId String\n  workspaceId String\n  userId String\n  clientId String\n}\n',
+    );
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src', 'auth.ts'), 'const tenantId = req.user.organizationId;');
+    const columns = detectTenantColumns(
+      /** @type {any} */ ({ repoRoot: root, targets: [root] }),
+    );
+    assert.ok(columns.includes('organizationId'));
+    assert.ok(columns.includes('workspaceId'));
+    assert.ok(columns.includes('tenantId'));
+    assert.ok(!columns.includes('userId'), 'userId is a user, not a tenant');
+    assert.ok(!columns.includes('clientId'), 'clientId is OAuth, not tenant scope');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('materializeTenantRule writes a readable rule file and returns its path', () => {
