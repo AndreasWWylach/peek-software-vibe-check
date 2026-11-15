@@ -35,7 +35,10 @@ const FIREBASE_ADMIN_PKG = JSON.stringify({ dependencies: { 'firebase-admin': '^
 test('isOpenRules + requiresAuth classify rules content', () => {
   assert.equal(isOpenRules('match /{d=**} { allow read, write: if true; }'), true);
   assert.equal(isOpenRules('allow read, write;'), true);
+  assert.equal(isOpenRules('match /{d=**} { allow write: if true; }'), true);
   assert.equal(isOpenRules('allow read, write: if request.auth != null;'), false);
+  // Scoped public read (write denied) is a deliberate pattern — not "open".
+  assert.equal(isOpenRules('match /rvSlugs/{slug} { allow read: if true; allow write: if false; }'), false);
   assert.equal(requiresAuth('allow read: if request.auth != null;'), true);
   assert.equal(requiresAuth('allow read: if true;'), false);
 });
@@ -46,8 +49,40 @@ test('firebase provider flags Firestore with no rules file', async () => {
   });
   assert.equal(findings.length, 1);
   assert.equal(findings[0].source.ruleId, 'missing-rules');
-  assert.equal(findings[0].severity, 'high');
+  assert.equal(findings[0].severity, 'medium'); // server-only (Admin SDK) access
   assert.equal(findings[0].teardownId, 'TD-008');
+});
+
+test('firebase provider escalates client-direct Firestore with no rules to critical', async () => {
+  const findings = await runFixture((root) => {
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { firebase: '^12' } }));
+    writeFileSync(
+      join(root, 'src', 'db.ts'),
+      "import { getFirestore } from 'firebase/firestore';\nexport const db = getFirestore();\n",
+    );
+  });
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].source.ruleId, 'missing-rules');
+  assert.equal(findings[0].severity, 'critical');
+});
+
+test('firebase provider flags Cloud Functions with no visible auth check', async () => {
+  const findings = await runFixture((root) => {
+    mkdirSync(join(root, 'functions'), { recursive: true });
+    writeFileSync(
+      join(root, 'functions', 'package.json'),
+      JSON.stringify({ dependencies: { 'firebase-functions': '^5', 'firebase-admin': '^12' } }),
+    );
+    writeFileSync(
+      join(root, 'functions', 'publicFn.ts'),
+      "import * as functions from 'firebase-functions';\nexport const hello = functions.https.onCall(() => 'hi');\n",
+    );
+  });
+  const auth = findings.filter((finding) => finding.source.ruleId === 'handler-no-auth');
+  assert.equal(auth.length, 1);
+  assert.equal(auth[0].teardownId, 'TD-032');
+  assert.equal(auth[0].severity, 'low');
 });
 
 test('firebase provider flags open (if true) rules as critical', async () => {
@@ -76,6 +111,16 @@ test('firebase provider stays silent on auth-required rules', async () => {
     writeFileSync(
       join(root, 'firestore.rules'),
       'match /tenants/{tenantId}/{d=**} { allow read, write: if request.auth != null && request.auth.uid == tenantId; }',
+    );
+  });
+  assert.equal(findings.length, 0);
+});
+
+test('firebase provider stays silent on scoped public reads (write denied)', async () => {
+  const findings = await runFixture((root) => {
+    writeFileSync(
+      join(root, 'firestore.rules'),
+      'match /rvSlugs/{slug} { allow read: if true; allow write: if false; }\nmatch /{d=**} { allow read, write: if request.auth != null; }',
     );
   });
   assert.equal(findings.length, 0);

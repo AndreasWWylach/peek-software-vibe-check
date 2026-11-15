@@ -51,3 +51,22 @@ test('detectStack ignores node_modules and tolerates missing files', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('findRulesFile sees rules at the repo root even when targets exclude it', () => {
+  const root = mkdtempSync(join(tmpdir(), 'vibe-check-stack-'));
+  try {
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'src', 'main.js'), 'const x = 1;\n');
+    writeFileSync(join(root, 'firestore.rules'), 'rules_version = "2";\nservice cloud.firestore { match /databases/{database}/documents { match /{document=**} { allow read, write: if request.auth != null; } } }\n');
+    writeFileSync(join(root, 'storage.rules'), 'rules_version = "2";\n');
+
+    // Targets exclude the repo root — the rules files must still be found.
+    assert.equal(findRulesFile(root, [join(root, 'src')], 'firestore.rules'), 'firestore.rules');
+    assert.equal(findRulesFile(root, [join(root, 'src')], 'storage.rules'), 'storage.rules');
+    const stack = detectStack(root, [join(root, 'src')]);
+    assert.equal(stack.firestore, true);
+    assert.equal(stack.storage, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

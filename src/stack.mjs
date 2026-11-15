@@ -35,26 +35,58 @@ const DEP_MARKERS = /** @type {Record<string, string>} */ (
   })
 );
 
+/** Source file extensions whose content is scanned for Firebase signals. */
+const SOURCE_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
+
+/** Client SDK direct-Firestore usage (browser-side access gated by rules). */
+const CLIENT_FIRESTORE_RE =
+  /\bgetFirestore\s*\(\s*\)|firebase\.firestore\s*\(|initializeFirestore\s*\(/;
+
+/** Cloud Function HTTP handlers (`onCall`/`onRequest`) — the callable surface. */
+const FN_HANDLER_RE = /\bon(?:Call|Request)\s*\(/;
+
+/** Auth tokens that a handler may use to verify the caller. */
+const AUTH_RE =
+  /\brequest\.auth\b|\bcontext\.auth\b|\bverifyIdToken\b|\bverifySessionCookie\b/;
+
 /**
  * Detect the app's stack markers (see DEP_MARKERS) + locate the security-rules
- * files. Deterministic and offline — reads file names and package manifests.
+ * files + Firebase content signals. Deterministic and offline — reads file
+ * names, package manifests, and source-file text.
  * @param {string} repoRoot
  * @param {string[]} targets — absolute target paths.
- * @returns {{ markers: Set<string>; rulesFiles: Map<string, string> }}
+ * @returns {{
+ *   markers: Set<string>;
+ *   rulesFiles: Map<string, string>;
+ *   clientFirestore: boolean;
+ *   unauthFunctions: string[];
+ * }}
  */
 export function scanRepo(repoRoot, targets) {
   /** @type {Set<string>} */
   const markers = new Set();
   /** @type {Map<string, string>} basename → repo-relative path (first found). */
   const rulesFiles = new Map();
+  /** @type {{ clientFirestore: boolean; unauthFunctions: string[] }} */
+  const state = { clientFirestore: false, unauthFunctions: [] };
 
   if (existsSync(join(repoRoot, 'firebase.json'))) markers.add('firebase');
   readPackageJson(join(repoRoot, 'package.json'), markers);
+  // Rules files typically live at the repo root — outside any scan target.
+  recordRootRules('firestore.rules', repoRoot, markers, rulesFiles);
+  recordRootRules('storage.rules', repoRoot, markers, rulesFiles);
 
   for (const target of targets) {
-    walk(target, repoRoot, markers, rulesFiles);
+    walk(target, repoRoot, markers, rulesFiles, state);
   }
-  return { markers, rulesFiles };
+  // Client SDK direct usage implies Firestore, even without a rules file.
+  if (state.clientFirestore) markers.add('firestore');
+  return {
+    markers,
+    rulesFiles,
+    clientFirestore: state.clientFirestore,
+    unauthFunctions: state.unauthFunctions,
+  };
 }
 
 /**
@@ -84,13 +116,15 @@ export function findRulesFile(repoRoot, targets, name) {
 }
 
 /**
- * Recursively walk a directory, recording stack markers + rules-file paths.
+ * Recursively walk a directory, recording stack markers, rules-file paths, and
+ * Firebase content signals (client Firestore usage + unauthenticated handlers).
  * @param {string} dir
  * @param {string} repoRoot
  * @param {Set<string>} markers
  * @param {Map<string, string>} rulesFiles
+ * @param {{ clientFirestore: boolean; unauthFunctions: string[] }} state
  */
-function walk(dir, repoRoot, markers, rulesFiles) {
+function walk(dir, repoRoot, markers, rulesFiles, state) {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -102,7 +136,7 @@ function walk(dir, repoRoot, markers, rulesFiles) {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (IGNORED_DIRS.has(entry.name)) continue;
-      walk(abs, repoRoot, markers, rulesFiles);
+      walk(abs, repoRoot, markers, rulesFiles, state);
     } else if (entry.isFile()) {
       if (entry.name === 'package.json') {
         readPackageJson(abs, markers);
@@ -116,9 +150,52 @@ function walk(dir, repoRoot, markers, rulesFiles) {
         markers.add('prisma');
       } else if (entry.name === 'firebase.json') {
         markers.add('firebase');
+      } else if (isSourceFile(entry.name)) {
+        scanSource(abs, repoRoot, state);
       }
     }
   }
+}
+
+/**
+ * Whether a file name has a JS/TS source extension (content is scanned).
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isSourceFile(name) {
+  const dot = name.lastIndexOf('.');
+  return dot !== -1 && SOURCE_EXTS.has(name.slice(dot).toLowerCase());
+}
+
+/**
+ * Read a source file and record client-Firestore usage + unauthenticated
+ * Cloud Function handlers.
+ * @param {string} abs
+ * @param {string} repoRoot
+ * @param {{ clientFirestore: boolean; unauthFunctions: string[] }} state
+ */
+function scanSource(abs, repoRoot, state) {
+  let text = '';
+  try {
+    text = readFileSync(abs, 'utf8');
+  } catch {
+    return;
+  }
+  if (!state.clientFirestore && CLIENT_FIRESTORE_RE.test(text)) state.clientFirestore = true;
+  if (FN_HANDLER_RE.test(text) && !AUTH_RE.test(text)) {
+    state.unauthFunctions.push(toRepoFile(abs, repoRoot));
+  }
+}
+
+/**
+ * Normalize an absolute path to a repo-relative one.
+ * @param {string} abs
+ * @param {string} repoRoot
+ * @returns {string}
+ */
+function toRepoFile(abs, repoRoot) {
+  if (isAbsolute(abs)) return relative(repoRoot, abs).replace(/^[/\\]+/, '');
+  return abs.replace(/^[/\\]+/, '');
 }
 
 /**
@@ -147,6 +224,20 @@ function readPackageJson(file, markers) {
     // The Admin SDK is the server-side path to Firestore — strong enough signal.
     if (name === 'firebase-admin') markers.add('firestore');
   }
+}
+
+/**
+ * Record a rules file that sits directly at the repo root (outside targets).
+ * @param {'firestore.rules' | 'storage.rules'} name
+ * @param {string} repoRoot
+ * @param {Set<string>} markers
+ * @param {Map<string, string>} rulesFiles
+ */
+function recordRootRules(name, repoRoot, markers, rulesFiles) {
+  const abs = join(repoRoot, name);
+  if (!existsSync(abs)) return;
+  markers.add(name === 'firestore.rules' ? 'firestore' : 'storage');
+  recordFile(rulesFiles, name, abs, repoRoot);
 }
 
 /**

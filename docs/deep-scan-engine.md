@@ -270,8 +270,10 @@ assertion calls as a TD-017 ("hallucinated tests") heuristic — see §8.1.
 
 A pure-Node **`firebase` provider** likewise needs no binary: when the stack scan
 detects Firebase/Firestore it checks the security-rules boundary — missing
-`firestore.rules`, open `if true` rules, and rules that don't require
-`request.auth` (the Firestore flavor of TD-008).
+`firestore.rules` (escalated to critical when the client SDK accesses Firestore
+directly), open `if true` rules, rules that don't require `request.auth`, and a
+low-severity heuristic flagging Cloud Function `onCall`/`onRequest` handlers with
+no visible auth check.
 
 ### 5.8 Setup & onboarding (the installer)
 

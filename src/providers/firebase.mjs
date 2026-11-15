@@ -18,7 +18,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { detectStack, findRulesFile } from '../stack.mjs';
+import { scanRepo } from '../stack.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').Finding} Finding */
@@ -35,18 +35,25 @@ export const firebaseProvider = {
   available: () => Promise.resolve(true),
   applicable: () => true,
   async run(_config, ctx) {
-    const stack = detectStack(ctx.repoRoot, ctx.targets);
-    if (!stack.firestore && !stack.storage) {
-      return []; // not a Firebase data app — nothing to check.
+    const { markers, rulesFiles, clientFirestore, unauthFunctions } = scanRepo(ctx.repoRoot, ctx.targets);
+    const firestore = markers.has('firestore');
+    const storage = markers.has('storage');
+    const cloudFunctions = markers.has('cloudFunctions');
+
+    if (!firestore && !storage && !cloudFunctions) {
+      return []; // not a Firebase app — nothing to check.
     }
 
     /** @type {Finding[]} */
     const findings = [];
 
-    if (stack.firestore) {
-      const rulesFile = findRulesFile(ctx.repoRoot, ctx.targets, 'firestore.rules');
+    if (firestore) {
+      const rulesFile = rulesFiles.get('firestore.rules') ?? null;
       if (!rulesFile) {
-        findings.push(missingRulesFinding('Firestore', 'high'));
+        // Client SDK direct access + no rules in repo = the boundary is either
+        // missing (test mode) or unverifiable out-of-band. Server-only (Admin
+        // SDK) access has no client boundary, so it's a softer signal.
+        findings.push(missingRulesFinding('Firestore', clientFirestore ? 'critical' : 'medium', clientFirestore));
       } else {
         const content = readFileSafely(join(ctx.repoRoot, rulesFile));
         if (isOpenRules(content)) {
@@ -57,10 +64,16 @@ export const firebaseProvider = {
       }
     }
 
-    if (stack.storage) {
-      const rulesFile = findRulesFile(ctx.repoRoot, ctx.targets, 'storage.rules');
+    if (storage) {
+      const rulesFile = rulesFiles.get('storage.rules') ?? null;
       if (!rulesFile) {
-        findings.push(missingRulesFinding('Storage', 'medium'));
+        findings.push(missingRulesFinding('Storage', 'medium', false));
+      }
+    }
+
+    if (cloudFunctions) {
+      for (const file of unauthFunctions) {
+        findings.push(noHandlerAuthFinding(file));
       }
     }
 
@@ -69,13 +82,20 @@ export const firebaseProvider = {
 };
 
 /**
- * Does the rules content grant access unconditionally (`if true` / no condition)?
+ * Does the rules content grant access unconditionally?
+ *
+ * Precision first: open WRITES are never acceptable (scoped or not), and an
+ * unconditional `allow read;` / `allow write;` / `allow read, write;` is open.
+ * A scoped `allow read: if true` (e.g. a public catalog or public reviews, with
+ * `write: if false`) is a deliberate, common pattern — NOT flagged.
  * @param {string} text
  * @returns {boolean}
  */
 export function isOpenRules(text) {
   return (
-    /\ballow\b[^;\n]*\bif\s+true\b/.test(text) ||
+    // Open writes (`allow … write … if true`), anywhere.
+    /\ballow\s+[^;\n]*\bwrite\b[^;\n]*\bif\s+true\b/.test(text) ||
+    // Unconditional allow (no `if` condition at all).
     /\ballow\s+(?:read|write)(\s*,\s*(?:read|write))?\s*;/.test(text)
   );
 }
@@ -93,10 +113,14 @@ export function requiresAuth(text) {
  * "No security rules checked in" finding.
  * @param {string} service — "Firestore" or "Storage".
  * @param {Severity} severity
+ * @param {boolean} clientDirect — the client SDK accesses the data directly.
  * @returns {Finding}
  */
-function missingRulesFinding(service, severity) {
+function missingRulesFinding(service, severity, clientDirect) {
   const name = service === 'Firestore' ? 'firestore.rules' : 'storage.rules';
+  const message = clientDirect
+    ? `The frontend reads/writes ${service} directly via the client SDK, but no \`${name}\` is checked in — the access-control boundary is unverifiable (test-mode or console-managed rules).`
+    : `No \`${name}\` file is checked in. If all ${service} access is server-side (Admin SDK), the boundary lives in the function code — verify every function authenticates its caller.`;
   return {
     id: `firebase:missing-${name}`,
     kind: 'teardown',
@@ -107,8 +131,8 @@ function missingRulesFinding(service, severity) {
     pillar: 'security',
     teardownId: TEARDOWN_ID,
     title: `${service} has no security rules`,
-    message: `The app uses ${service} but no \`${name}\` file is checked in — the data may be open to unauthenticated read/write.`,
-    fixSummary: `Add \`${name}\` requiring \`request.auth\` and tenant-scoped paths, then deploy it via firebase.json.`,
+    message,
+    fixSummary: `Add \`${name}\` requiring \`request.auth\` and tenant-scoped paths, then deploy it via firebase.json — or route all data access through authenticated Cloud Functions.`,
     source: { provider: 'firebase', ruleId: 'missing-rules' },
     dependency: null,
   };
@@ -158,6 +182,29 @@ function noAuthFinding(rulesFile, severity) {
     message: 'The rules grant access without checking `request.auth` — anonymous clients can read or write.',
     fixSummary: 'Require `request.auth != null` (and tenant scoping) on every `match`.',
     source: { provider: 'firebase', ruleId: 'no-auth' },
+    dependency: null,
+  };
+}
+
+/**
+ * Cloud Function handler with no visible auth check (TD-032, heuristic).
+ * @param {string} file
+ * @returns {Finding}
+ */
+function noHandlerAuthFinding(file) {
+  return {
+    id: `firebase:handler-no-auth:${file}`,
+    kind: 'teardown',
+    file,
+    line: null,
+    column: null,
+    severity: 'low',
+    pillar: 'security',
+    teardownId: 'TD-032',
+    title: 'Cloud Function handler with no visible auth check',
+    message: 'This file defines `onCall`/`onRequest` handlers but references no auth verification (`request.auth`, `verifyIdToken`, …) — verify it is intentionally public or gated another way (signed URLs, allowlists).',
+    fixSummary: 'Verify the caller with `context.auth` / `request.auth` or an explicit token check before touching data.',
+    source: { provider: 'firebase', ruleId: 'handler-no-auth' },
     dependency: null,
   };
 }
