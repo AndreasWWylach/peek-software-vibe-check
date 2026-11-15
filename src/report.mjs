@@ -316,7 +316,7 @@ function renderSummary(codeFindings, dependencies, testFindings) {
     if (list) list.push(finding);
     else byProvider.set(provider, [finding]);
   }
-  const order = ['semgrep', 'gitleaks', 'firebase', 'madge', 'deps', 'scc', 'eslint', 'tests', 'osv'];
+  const order = ['semgrep', 'gitleaks', 'firebase', 'madge', 'deps', 'headers', 'ci', 'scc', 'eslint', 'tests', 'osv'];
   /** @type {string[]} */
   const lines = [];
   for (const provider of order) {
