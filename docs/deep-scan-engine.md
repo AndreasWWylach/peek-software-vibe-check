@@ -121,6 +121,9 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │       ├── scc.mjs            # file size → TD-019
 │       ├── gitleaks.mjs       # secrets → TD-016
 │       ├── deps.mjs           # dependency hygiene: missing lockfile (scored) + floating versions (advisory)
+│       ├── headers.mjs        # security-header absence for server frameworks (advisory)
+│       ├── ci.mjs             # CI pipeline: no-pipeline / no-tests / no-coverage (advisory)
+│       ├── checkov.mjs        # IaC misconfiguration + IAM wildcards (checkov, optional)
 │       ├── eslint.mjs         # language-linter hygiene (QA)
 │       ├── tests.mjs          # test presence + assertion heuristic (QA)
 │       └── firebase.mjs       # Firestore/Storage security-rules boundary (QA → security)
@@ -186,6 +189,8 @@ config ──▶ validate
         │     Madge (circular deps) · scc (file size)               ──▶ teardown findings
         │     Gitleaks (secrets)                                    ──▶ teardown findings
         │     deps (missing lockfile · floating versions)           ──▶ hygiene findings
+        │     headers (security-header absence) · ci (pipeline)      ──▶ hygiene findings
+        │     checkov (IaC misconfig · IAM wildcards)               ──▶ hygiene findings
         │     ESLint (linter) · tests (presence/assertions)         ──▶ hygiene + QA findings
         │     Firebase/Firestore (security rules)                    ──▶ teardown findings
         ──▶ dedup (same teardownId + file/line collapses)
@@ -289,6 +294,25 @@ lockfile (scored, medium — builds aren't reproducible) and dependency
 declarations with floating versions (`*`, `latest`, `dev-*`, unbounded `>=`/`>` —
 advisory, low; caret/tilde ranges are accepted as semver-bounded, and Composer
 platform requirements `php`/`ext-*`/`lib-*` are skipped).
+
+A pure-Node **`headers` provider** (no binary) detects a web-server framework
+(Express/Next/Koa/Fastify/NestJS, Flask/FastAPI/Django/Starlette) and flags the
+absence of security-header configuration (CSP/HSTS/X-Frame-Options/`helmet`/
+`Talisman`) as an **advisory** — absence of evidence is a signal, not a defect,
+since headers may be set at a reverse proxy.
+
+A pure-Node **`ci` provider** (no binary) reads the committed CI configs
+(`.github/workflows/*`, `.gitlab-ci.yml`, `Jenkinsfile`, …) and flags
+no-pipeline, no-tests, or no-coverage-gate as **advisories**.
+
+A **`checkov` provider** (optional, `pipx install checkov`) scans IaC files
+(Dockerfile/compose, Terraform, CloudFormation/K8s by content) for
+misconfiguration — including the IAM `*` wildcard smells (`CKV_AWS_109/110/111`,
+scored high). Best-practice MEDIUM/LOW checks are advisories. It runs targeted
+(`--file`/`--directory`), skips checkov's secrets framework (gitleaks owns
+secrets), and handles checkov 3.x's array-shaped JSON with null severity via a
+curated fallback map. Terrascan is a documented alternative (Go binary, Rego)
+but not wired — the registry makes adding it later a ~30-line provider.
 
 ### 5.8 Setup & onboarding (the installer)
 

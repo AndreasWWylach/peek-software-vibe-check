@@ -2,7 +2,7 @@
 
 Open-source, local deep-scan engine for [peek.software](https://peek.software). It turns Peek's teardown catalog into an executable audit of your codebase — running **entirely on your machine, against your own source code**.
 
-> **Status:** Shipped — the engine scans real repos end-to-end with seven providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
+> **Status:** Shipped — the engine scans real repos end-to-end with twelve providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
 
 ## Trust statement
 
@@ -20,8 +20,9 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [scc](https://github.com/boyter/scc) — file-size metrics → monolithic-file findings (core)
 - [gitleaks](https://github.com/gitleaks/gitleaks) — secrets → hardcoded-secret findings (core)
 - [eslint](https://eslint.org) **9** — language linter → QA hygiene findings (core)
+- [checkov](https://www.checkov.io) — IaC misconfiguration + IAM wildcard scanning (optional)
 
-The **tests** provider (test presence + assertion heuristic) is built into the engine — no binary to install.
+The **tests**, **dependency-hygiene**, **security-headers**, **CI** and **Firebase** providers are built into the engine — no binary to install.
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 
@@ -78,11 +79,12 @@ npm test             # node:test — unit + parser + golden + integration tests
 npm run typecheck    # tsc --noEmit (JSDoc type-checked, @ts-check)
 ```
 
-Install the six provider binaries to run the full suite (unit + parser tests run
+Install the seven provider binaries to run the full suite (unit + parser tests run
 without them; golden + integration tests skip when a binary is missing):
 
 ```bash
 pipx install semgrep
+pipx install checkov
 npm install -g madge
 npm install -g eslint@9
 # scc (Linux amd64):
@@ -115,7 +117,7 @@ bin/            CLI entry
 src/            engine — config, scoring, providers, report
 schema/         published JSON Schema contracts (config + report)
 catalog/        vendored teardown facts snapshot
-rules/          custom Semgrep rules — one per (TD × language)
+rules/          custom Semgrep rules — teardown (peek/) + always-on hardening (hygiene/)
 examples/       sample app used by the integration test
 tests/          unit, parser, golden, and integration tests
 ```
