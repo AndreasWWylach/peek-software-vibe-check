@@ -74,10 +74,7 @@ export function renderMarkdown(report) {
   lines.push('## Findings Summary');
   lines.push('| Check | Findings | What |');
   lines.push('| --- | ---: | --- |');
-  lines.push(...renderSummary(codeFindings, dependencies));
-  if (testFindings.length > 0) {
-    lines.push(`_${testFindings.length} finding(s) in test files are reported below and are not scored._`);
-  }
+  lines.push(...renderSummary(codeFindings, dependencies, testFindings));
   lines.push('');
 
   lines.push('## Pillar Breakdown');
@@ -278,9 +275,10 @@ function topCodeIssue(codeFindings) {
  * Render the per-provider "Findings Summary" table rows.
  * @param {Finding[]} codeFindings
  * @param {import('./types.mjs').DependencySummary | undefined} dependencies
+ * @param {Finding[]} testFindings — in-test findings, counted but not scored.
  * @returns {string[]}
  */
-function renderSummary(codeFindings, dependencies) {
+function renderSummary(codeFindings, dependencies, testFindings) {
   /** @type {Map<string, Finding[]>} */
   const byProvider = new Map();
   for (const finding of codeFindings) {
@@ -307,6 +305,9 @@ function renderSummary(codeFindings, dependencies) {
       continue;
     }
     lines.push(`| ${provider} | ${list.length} | ${summarizeGroup(list)} |`);
+  }
+  if (testFindings.length > 0) {
+    lines.push(`| test files (not scored) | ${testFindings.length} | ${summarizeGroup(testFindings)} |`);
   }
   return lines;
 }
