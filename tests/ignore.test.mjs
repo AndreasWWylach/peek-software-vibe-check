@@ -20,6 +20,7 @@ test('isIgnoredDir flags dependency/build/cache dirs anywhere in the path', () =
   assert.equal(isIgnoredDir('var/log/dev.log'), true);
   assert.equal(isIgnoredDir('src/var/Config.php'), true); // segment match, like node_modules
   assert.equal(isIgnoredDir('.phpstan/cache/Container_abc.php'), true);
+  assert.equal(isIgnoredDir('frontend/.vite/deps/package.json'), true); // Vite dep-optimization cache
 });
 
 test('isVendoredPath flags published/vendored asset prefixes, not root dirs', () => {

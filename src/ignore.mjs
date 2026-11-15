@@ -18,6 +18,7 @@ export const IGNORED_DIRS = new Set([
   'dist',
   'build',
   '.next',
+  '.vite',
   'coverage',
   '.venv',
   'venv',

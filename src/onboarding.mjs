@@ -174,6 +174,25 @@ export const TOOLS = [
       commands: { default: 'npm install -g eslint@9' },
     },
   },
+  {
+    id: 'checkov',
+    name: 'checkov',
+    role: 'IaC misconfiguration + IAM policy scanning (optional).',
+    required: false,
+    minVersion: [2, 0, 0],
+    install: {
+      kind: 'command',
+      summary: 'Install checkov via pipx (falls back to pip)',
+      source: 'https://www.checkov.io',
+      commands: {
+        default:
+          'if command -v pipx >/dev/null 2>&1; then pipx install checkov; ' +
+          'elif command -v pip3 >/dev/null 2>&1; then pip3 install --user checkov; ' +
+          'elif python3 -m pip --version >/dev/null 2>&1; then python3 -m pip install --user checkov; ' +
+          'else echo "checkov needs Python 3 + pip or pipx — install semgrep first (its installer bootstraps pip), then re-run: vibe-check setup"; exit 1; fi',
+      },
+    },
+  },
 ];
 
 /**
