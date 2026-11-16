@@ -27,10 +27,11 @@ import { headersProvider } from './providers/headers.mjs';
 import { ciProvider } from './providers/ci.mjs';
 import { checkovProvider } from './providers/checkov.mjs';
 import { hadolintProvider } from './providers/hadolint.mjs';
+import { trivyProvider } from './providers/trivy.mjs';
 import { isTestFile } from './ignore.mjs';
 import { discoverSourceDirs } from './discover.mjs';
 import { detectStack } from './stack.mjs';
-import { dedupeFindings, sortFindings } from './findings.mjs';
+import { corroborateFindings, dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
 import { listTeardowns } from './catalog.mjs';
@@ -78,11 +79,13 @@ export async function run(configPath, options) {
   const ctx = { repoRoot: options.repoRoot, targets, log };
 
   const { findings, skipped } = await runProviders(
-    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider, depsProvider, headersProvider, ciProvider, checkovProvider, hadolintProvider],
+    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider, depsProvider, headersProvider, ciProvider, checkovProvider, hadolintProvider, trivyProvider],
     config,
     ctx,
   );
-  const sorted = sortFindings(dedupeFindings(findings));
+  // Cross-tool corroboration first (gitleaks ↔ trivy secret overlap), then
+  // dedup (dependency CVE merge records corroboration too), then sort.
+  const sorted = sortFindings(dedupeFindings(corroborateFindings(findings)));
   // Findings inside test files are reported but NOT scored: test code is not
   // shipped to production, yet a real key committed to a test file is still
   // public in git — so it must be flagged without tanking the readiness score.

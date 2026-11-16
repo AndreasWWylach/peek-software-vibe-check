@@ -2,7 +2,7 @@
 
 Open-source, local deep-scan engine for [peek.software](https://peek.software). It turns Peek's teardown catalog into an executable audit of your codebase — running **entirely on your machine, against your own source code**.
 
-> **Status:** Shipped — the engine scans real repos end-to-end with thirteen providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
+> **Status:** Shipped — the engine scans real repos end-to-end with fourteen providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
 
 ## Trust statement
 
@@ -22,6 +22,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [eslint](https://eslint.org) **9** — language linter → QA hygiene findings (core)
 - [checkov](https://www.checkov.io) — IaC misconfiguration + IAM wildcard scanning (optional)
 - [hadolint](https://github.com/hadolint/hadolint) — Dockerfile quality & hygiene lint (optional)
+- [trivy](https://trivy.dev) — filesystem vulnerability + secret scanning (optional)
 
 The **tests**, **dependency-hygiene**, **security-headers**, **CI** and **Firebase** providers are built into the engine — no binary to install.
 
@@ -80,7 +81,7 @@ npm test             # node:test — unit + parser + golden + integration tests
 npm run typecheck    # tsc --noEmit (JSDoc type-checked, @ts-check)
 ```
 
-Install the eight provider binaries to run the full suite (unit + parser tests run
+Install the nine provider binaries to run the full suite (unit + parser tests run
 without them; golden + integration tests skip when a binary is missing):
 
 ```bash
@@ -106,6 +107,10 @@ chmod +x ~/.local/bin/osv-scanner
 curl -sSL -o ~/.local/bin/hadolint \
   https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
 chmod +x ~/.local/bin/hadolint
+# trivy (Linux amd64):
+curl -sSL -o /tmp/trivy.tar.gz \
+  https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
+tar -xzf /tmp/trivy.tar.gz -C ~/.local/bin trivy
 ```
 
 - **Golden tests** (`tests/golden.test.mjs`) run each custom Semgrep rule against

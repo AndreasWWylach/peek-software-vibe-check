@@ -325,7 +325,7 @@ function renderSummary(codeFindings, dependencies, testFindings, advisories) {
     if (list) list.push(finding);
     else advisoriesByProvider.set(provider, [finding]);
   }
-  const order = ['semgrep', 'gitleaks', 'firebase', 'madge', 'deps', 'headers', 'ci', 'checkov', 'hadolint', 'scc', 'eslint', 'tests', 'osv'];
+  const order = ['semgrep', 'gitleaks', 'trivy', 'firebase', 'madge', 'deps', 'headers', 'ci', 'checkov', 'hadolint', 'scc', 'eslint', 'tests', 'osv'];
   /** @type {string[]} */
   const lines = [];
   for (const provider of order) {
@@ -401,7 +401,11 @@ function formatDependency(finding) {
     ? `${ids.slice(0, 3).join(', ')} … +${ids.length - 3} more`
     : ids.join(', ');
   const fix = finding.fixSummary ? ` ${finding.fixSummary}` : '';
-  return `| ${finding.severity} | \`${dep?.package ?? finding.file}\` | ${dep?.version ?? '?'} | ${cves || (finding.source.ruleId ?? 'CVE')} |${fix} |`;
+  const pkg = dep?.package ?? finding.file;
+  const corroboration = finding.corroboratedBy?.length
+    ? ` *(confirmed by ${finding.corroboratedBy.join(' + ')})*`
+    : '';
+  return `| ${finding.severity} | \`${pkg}\`${corroboration} | ${dep?.version ?? '?'} | ${cves || (finding.source.ruleId ?? 'CVE')} |${fix} |`;
 }
 
 /**
@@ -463,6 +467,9 @@ function formatFinding(finding) {
   }
   if (finding.fixSummary) {
     parts.push(`  - Fix: ${finding.fixSummary}`);
+  }
+  if (finding.corroboratedBy && finding.corroboratedBy.length > 0) {
+    parts.push(`  - Confirmed by ${finding.corroboratedBy.join(' + ')} (cross-tool agreement).`);
   }
   if (finding.teardownId) {
     parts.push(`  → see ${teardownPath(finding.teardownId)}`);

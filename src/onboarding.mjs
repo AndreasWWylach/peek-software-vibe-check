@@ -209,6 +209,22 @@ export const TOOLS = [
       binary: 'hadolint',
     },
   },
+  {
+    id: 'trivy',
+    name: 'trivy',
+    role: 'Filesystem vulnerability + secret scanning (optional).',
+    required: false,
+    minVersion: [0, 50, 0],
+    install: {
+      kind: 'download',
+      summary: 'Download trivy v0.76.2 (linux amd64)',
+      source: 'https://github.com/aquasecurity/trivy',
+      url: 'https://github.com/aquasecurity/trivy/releases/download/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz',
+      sha256: 'bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf',
+      archive: 'tar.gz',
+      binary: 'trivy',
+    },
+  },
 ];
 
 /**

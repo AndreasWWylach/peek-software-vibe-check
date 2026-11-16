@@ -36,11 +36,17 @@ export function dedupeKey(finding) {
 }
 
 /**
- * Merge `incoming` into `existing` (highest severity wins; CVE ids union).
+ * Merge `incoming` into `existing` (highest severity wins; CVE ids union;
+ * cross-provider agreement recorded in `corroboratedBy`).
  * @param {Finding} existing
  * @param {Finding} incoming
  */
 function mergeInto(existing, incoming) {
+  if (existing.source?.provider !== incoming.source?.provider) {
+    const others = new Set(existing.corroboratedBy ?? []);
+    others.add(incoming.source?.provider ?? 'unknown');
+    existing.corroboratedBy = [...others].sort();
+  }
   if (severityRank(incoming.severity) > severityRank(existing.severity)) {
     existing.severity = incoming.severity;
     existing.title = incoming.title;
@@ -51,6 +57,50 @@ function mergeInto(existing, incoming) {
     const union = new Set([...existing.dependency.cveIds, ...incoming.dependency.cveIds]);
     existing.dependency.cveIds = [...union].sort();
   }
+}
+
+/**
+ * Correlate overlapping findings across providers BEFORE dedup: when gitleaks
+ * and trivy both flag the same secret at the same file:line, collapse them into
+ * one finding annotated with `corroboratedBy` (cross-tool confirmation).
+ *
+ * Dependency (CVE) overlap is handled by `dedupeFindings` instead — trivy and
+ * osv-scanner findings for the same package+ecosystem already merge there.
+ * @param {Finding[]} findings
+ * @returns {Finding[]} findings with secret overlaps collapsed.
+ */
+export function corroborateFindings(findings) {
+  /** @type {Map<string, Finding>} */
+  const byKey = new Map();
+  /** @type {Finding[]} */
+  const out = [];
+  for (const finding of findings) {
+    const key = secretCorrelationKey(finding);
+    if (!key) {
+      out.push(finding);
+      continue;
+    }
+    const existing = byKey.get(key);
+    if (existing && existing.source?.provider !== finding.source?.provider) {
+      mergeInto(existing, finding);
+    } else {
+      byKey.set(key, finding);
+      out.push(finding);
+    }
+  }
+  return out;
+}
+
+/**
+ * The cross-provider correlation key for a secret finding (null when N/A).
+ * @param {Finding} finding
+ * @returns {string | null}
+ */
+function secretCorrelationKey(finding) {
+  const provider = finding.source?.provider;
+  if (provider === 'gitleaks') return `secret:${finding.file}:${finding.line ?? 0}`;
+  if (provider === 'trivy' && finding.kind === 'hygiene') return `secret:${finding.file}:${finding.line ?? 0}`;
+  return null;
 }
 
 /**

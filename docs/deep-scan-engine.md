@@ -125,6 +125,7 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │       ├── ci.mjs             # CI pipeline: no-pipeline / no-tests / no-coverage (advisory)
 │       ├── checkov.mjs        # IaC misconfiguration + IAM wildcards (checkov, optional)
 │       ├── hadolint.mjs       # Dockerfile quality & hygiene lint (hadolint, optional)
+│       ├── trivy.mjs          # filesystem vuln + secret scanning (trivy, optional)
 │       ├── eslint.mjs         # language-linter hygiene (QA)
 │       ├── tests.mjs          # test presence + assertion heuristic (QA)
 │       └── firebase.mjs       # Firestore/Storage security-rules boundary (QA → security)
@@ -193,6 +194,7 @@ config ──▶ validate
         │     headers (security-header absence) · ci (pipeline)      ──▶ hygiene findings
         │     checkov (IaC misconfig · IAM wildcards)               ──▶ hygiene findings
         │     hadolint (Dockerfile lint)                            ──▶ hygiene findings
+        │     trivy (vuln · secrets)                                ──▶ dependency + hygiene findings
         │     ESLint (linter) · tests (presence/assertions)         ──▶ hygiene + QA findings
         │     Firebase/Firestore (security rules)                    ──▶ teardown findings
         ──▶ dedup (same teardownId + file/line collapses)
@@ -320,6 +322,20 @@ A **`hadolint` provider** (optional, single binary) lints Dockerfiles for qualit
 and hygiene (pin image tags, pin apt/npm versions, JSON CMD, pipefail). It is
 the Dockerfile-*quality* counterpart to checkov's Dockerfile-*security* checks;
 both report as **advisories** (runtime infra posture, not scored).
+
+A **`trivy` provider** (optional, single binary) scans the filesystem with
+`--scanners vuln,secret` — vulnerabilities (merged into the dependency/CVE table
+with osv-scanner) and secrets (advisory; gitleaks remains the scoring secret
+engine). Its IaC misconfiguration scanner is skipped (checkov owns that).
+
+**Cross-tool corroboration** (`src/findings.mjs` → `corroborateFindings`): when
+two engines independently flag the same issue — trivy + gitleaks on the same
+secret (by file:line), or trivy + osv-scanner on the same package (by
+package+ecosystem, CVE ids unioned) — the engine collapses them into one finding
+annotated `corroboratedBy`, rendered as *"confirmed by trivy"*. Agreement is a
+confidence signal, not noise. Note trivy's secret engine embeds gitleaks' rules,
+so its secret overlap is weaker confirmation than its independent vulnerability
+DB (trivy vs OSV), which is the genuinely independent check.
 
 ### 5.8 Setup & onboarding (the installer)
 

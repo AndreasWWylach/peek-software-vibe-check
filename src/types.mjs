@@ -61,6 +61,8 @@
  * @property {boolean} [advisory] - true when the finding is informational
  *   (e.g. a committed secret in a conventional config file) — reported, but
  *   excluded from the risk score.
+ * @property {string[]} [corroboratedBy] - provider ids of other engines that
+ *   independently flagged the same issue (cross-tool confirmation).
  */
 
 /**

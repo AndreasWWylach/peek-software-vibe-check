@@ -85,7 +85,8 @@
         "source": { "$ref": "#/definitions/findingSource" },
         "dependency": { "anyOf": [{ "$ref": "#/definitions/dependencyInfo" }, { "type": "null" }] },
         "inTests": { "type": "boolean" },
-        "advisory": { "type": "boolean" }
+        "advisory": { "type": "boolean" },
+        "corroboratedBy": { "type": "array", "items": { "type": "string" }, "uniqueItems": true }
       }
     },
     "findingSource": {
