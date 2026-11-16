@@ -89,6 +89,14 @@ jobs:
           tar -xzf /tmp/gosec.tar.gz -C "$HOME/.local/bin" gosec
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # phpstan runs the PHP static-analysis provider (golden test needs PHP).
+      - name: Install phpstan
+        run: |
+          curl -sSL -o "$HOME/.local/bin/phpstan" \
+            https://github.com/phpstan/phpstan/releases/download/2.3.1/phpstan.phar
+          chmod +x "$HOME/.local/bin/phpstan"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test

@@ -30,6 +30,7 @@ import { hadolintProvider } from './providers/hadolint.mjs';
 import { trivyProvider } from './providers/trivy.mjs';
 import { banditProvider } from './providers/bandit.mjs';
 import { gosecProvider } from './providers/gosec.mjs';
+import { phpstanProvider } from './providers/phpstan.mjs';
 import { isTestFile } from './ignore.mjs';
 import { discoverSourceDirs } from './discover.mjs';
 import { detectStack } from './stack.mjs';
@@ -86,11 +87,16 @@ export async function run(configPath, options) {
     ...autoIncluded.map((dir) => resolve(options.repoRoot, dir)),
   ];
 
+  // Detect the app stack ONCE — both the report's App Stack summary and the
+  // framework-gated providers (Semgrep PHP packs, phpstan) read the same
+  // markers, so they never disagree about what the app is built on.
+  const stack = detectStack(options.repoRoot, targets);
+
   /** @type {RunContext} */
-  const ctx = { repoRoot: options.repoRoot, targets, log };
+  const ctx = { repoRoot: options.repoRoot, targets, stack, log };
 
   const { findings, skipped } = await runProviders(
-    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider, depsProvider, headersProvider, ciProvider, checkovProvider, hadolintProvider, trivyProvider, banditProvider, gosecProvider],
+    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider, depsProvider, headersProvider, ciProvider, checkovProvider, hadolintProvider, trivyProvider, banditProvider, gosecProvider, phpstanProvider],
     config,
     ctx,
   );
@@ -140,7 +146,7 @@ export async function run(configPath, options) {
     dependencies,
     skippedProviders: skipped,
     notStaticallyVerifiable: [],
-    stack: detectStack(options.repoRoot, targets),
+    stack,
     ...(calibration ? { calibration } : {}),
   });
 

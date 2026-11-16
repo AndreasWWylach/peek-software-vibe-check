@@ -325,7 +325,7 @@ function renderSummary(codeFindings, dependencies, testFindings, advisories) {
     if (list) list.push(finding);
     else advisoriesByProvider.set(provider, [finding]);
   }
-  const order = ['semgrep', 'gitleaks', 'trivy', 'firebase', 'madge', 'deps', 'headers', 'ci', 'checkov', 'hadolint', 'bandit', 'gosec', 'scc', 'eslint', 'tests', 'osv'];
+  const order = ['semgrep', 'gitleaks', 'trivy', 'firebase', 'madge', 'deps', 'headers', 'ci', 'checkov', 'hadolint', 'bandit', 'gosec', 'phpstan', 'scc', 'eslint', 'tests', 'osv'];
   /** @type {string[]} */
   const lines = [];
   for (const provider of order) {

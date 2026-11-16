@@ -2,7 +2,7 @@
 
 Open-source, local deep-scan engine for [peek.software](https://peek.software). It turns Peek's teardown catalog into an executable audit of your codebase — running **entirely on your machine, against your own source code**.
 
-> **Status:** Shipped — the engine scans real repos end-to-end with sixteen providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
+> **Status:** Shipped — the engine scans real repos end-to-end with seventeen providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
 
 ## Trust statement
 
@@ -25,8 +25,9 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [trivy](https://trivy.dev) — filesystem vulnerability + secret scanning (optional)
 - [bandit](https://bandit.readthedocs.io) — Python security SAST (optional, Python repos only)
 - [gosec](https://github.com/securego/gosec) — Go security SAST (optional, Go repos only)
+- [phpstan](https://phpstan.org) — PHP static analysis, hallucination checks (optional, composer-installed PHP apps)
 
-The **tests**, **dependency-hygiene**, **security-headers**, **CI** and **Firebase** providers are built into the engine — no binary to install.
+The **tests**, **dependency-hygiene**, **security-headers**, **CI** and **Firebase** providers are built into the engine — no binary to install. The **Semgrep PHP packs** (core + Laravel/Symfony/Doctrine/WordPress) are vendored into `rules/vendored/php/` (offline, pinned SHA) and selected automatically from `composer.json`.
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 
@@ -83,7 +84,7 @@ npm test             # node:test — unit + parser + golden + integration tests
 npm run typecheck    # tsc --noEmit (JSDoc type-checked, @ts-check)
 ```
 
-Install the eleven provider binaries to run the full suite (unit + parser tests run
+Install the twelve provider binaries to run the full suite (unit + parser tests run
 without them; golden + integration tests skip when a binary is missing):
 
 ```bash
@@ -119,6 +120,10 @@ pipx install bandit
 curl -sSL -o /tmp/gosec.tar.gz \
   https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_linux_amd64.tar.gz
 tar -xzf /tmp/gosec.tar.gz -C ~/.local/bin gosec
+# phpstan (PHAR, needs PHP ≥ 8.1):
+curl -sSL -o ~/.local/bin/phpstan \
+  https://github.com/phpstan/phpstan/releases/download/2.3.1/phpstan.phar
+chmod +x ~/.local/bin/phpstan
 ```
 
 - **Golden tests** (`tests/golden.test.mjs`) run each custom Semgrep rule against

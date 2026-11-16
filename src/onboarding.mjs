@@ -17,14 +17,40 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { ENGINE_NAME, ENGINE_VERSION } from './version.mjs';
 
 /** @typedef {import('./types.mjs').Severity} Severity */
+
+/** Absolute path to the vendored PHP ruleset manifest. */
+const VENDORED_MANIFEST = fileURLToPath(new URL('../rules/vendored/php/manifest.json', import.meta.url));
+
+/** Warn in `doctor` when the vendored rulesets are older than this (days). */
+const RULESET_STALE_DAYS = 90;
+
+/**
+ * How old the vendored PHP rulesets are (for the `doctor` staleness warning).
+ * @returns {{ ageDays: number; pinnedSha: string } | null} null when absent.
+ */
+function rulesetFreshness() {
+  if (!existsSync(VENDORED_MANIFEST)) return null;
+  try {
+    const manifest = JSON.parse(readFileSync(VENDORED_MANIFEST, 'utf8'));
+    const ts = Date.parse(String(manifest.vendoredAt ?? ''));
+    if (!Number.isFinite(ts)) return null;
+    return {
+      ageDays: Math.floor((Date.now() - ts) / 86400000),
+      pinnedSha: String(manifest.pinnedSha ?? '').slice(0, 8),
+    };
+  } catch {
+    return null;
+  }
+}
 
 /** @typedef {[number, number, number]} Semver */
 
@@ -259,6 +285,21 @@ export const TOOLS = [
       binary: 'gosec',
     },
   },
+  {
+    id: 'phpstan',
+    name: 'phpstan',
+    role: 'PHP static analysis (optional, needs PHP ≥ 8.1).',
+    required: false,
+    minVersion: [2, 0, 0],
+    install: {
+      kind: 'download',
+      summary: 'Download phpstan v2.3.1 (PHAR)',
+      source: 'https://phpstan.org',
+      url: 'https://github.com/phpstan/phpstan/releases/download/2.3.1/phpstan.phar',
+      sha256: '85157dba3d95d77ca603d2b7303aa78a538f9e3b56ccad07dd794c53aa96d1ae',
+      binary: 'phpstan',
+    },
+  },
 ];
 
 /**
@@ -462,6 +503,15 @@ export function doctor(options = {}) {
   }
   console.log('');
   const missing = results.filter((r) => r.status !== 'ok').length;
+  const freshness = rulesetFreshness();
+  if (freshness) {
+    const stale = freshness.ageDays > RULESET_STALE_DAYS;
+    const age = paint(stale ? '33' : '90', `${freshness.ageDays} days old`);
+    console.log(`  PHP rulesets: vendored @ ${freshness.pinnedSha}, ${age}`);
+    if (stale) {
+      console.log(`    ${paint('33', 'consider refreshing: node scripts/vendor-php-rules.mjs')}`);
+    }
+  }
   console.log(missing === 0 ? paint('32', 'All prerequisites satisfied.') : `${missing} tool(s) need attention — run \`vibe-check setup\`.`);
   return results;
 }

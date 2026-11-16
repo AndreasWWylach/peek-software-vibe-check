@@ -128,6 +128,7 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │       ├── trivy.mjs          # filesystem vuln + secret scanning (trivy, optional)
 │       ├── bandit.mjs         # Python security SAST (bandit, optional, Python repos)
 │       ├── gosec.mjs          # Go security SAST (gosec, optional, Go repos)
+│       └── phpstan.mjs        # PHP static analysis / hallucination checks (phpstan, optional)
 │       ├── eslint.mjs         # language-linter hygiene (QA)
 │       ├── tests.mjs          # test presence + assertion heuristic (QA)
 │       └── firebase.mjs       # Firestore/Storage security-rules boundary (QA → security)
@@ -136,7 +137,8 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │   └── peek-report.schema.json   # report contract (JSON Schema, versioned)
 ├── rules/
 │   ├── peek/<TD-id>/<lang>.yaml  # custom Semgrep rules — one per (TD × language)
-│   └── hygiene/*.yaml            # always-on LastMile hardening rules (XSS / open redirect / eval)
+│   ├── hygiene/*.yaml            # always-on LastMile hardening rules (XSS / open redirect / eval)
+│   └── vendored/php/…            # vendored Semgrep PHP packs (lang/laravel/symfony/doctrine/wordpress) + manifest.json
 ├── catalog/
 │   └── teardowns.json         # VENDORED facts snapshot (id/pillar/severity/points/fixSummary/languages)
 ├── tests/
@@ -204,6 +206,7 @@ config ──▶ validate
         │     hadolint (Dockerfile lint)                            ──▶ hygiene findings
         │     trivy (vuln · secrets)                                ──▶ dependency + hygiene findings
         │     bandit (Python SAST) · gosec (Go SAST)                ──▶ teardown + hygiene findings
+        │     phpstan (PHP static analysis, vendor/ gated)          ──▶ QA advisory findings
         │     ESLint (linter) · tests (presence/assertions)         ──▶ hygiene + QA findings
         │     Firebase/Firestore (security rules)                    ──▶ teardown findings
         ──▶ dedup (same teardownId + file/line collapses)
@@ -340,6 +343,15 @@ A **`trivy` provider** (optional, single binary) scans the filesystem with
 with osv-scanner) and secrets (advisory; gitleaks remains the scoring secret
 engine). Its IaC misconfiguration scanner is skipped (checkov owns that).
 
+**Vendored Semgrep PHP packs** (`rules/vendored/php/`): the community PHP rulesets
+(`php/lang` core + Laravel/Symfony/Doctrine/WordPress) are pinned (SHA) and
+committed — offline, never downloaded from the Registry at scan time — and
+selected at scan time from the detected stack: `lang` always; the framework pack
+when the `composer.json` marker matches (Pimcore → Symfony + Doctrine). Hits
+that are **taint-proven** SQLi/command injection map to TD-033/TD-042 and score;
+everything else is a hygiene advisory. `scripts/vendor-php-rules.mjs` refreshes
+them, and `vibe-check doctor` warns when they are older than 90 days.
+
 **Cross-tool corroboration** (`src/findings.mjs` → `corroborateFindings`): when
 two engines independently flag the same issue — trivy + gitleaks on the same
 secret (by file:line), or trivy + osv-scanner on the same package (by
@@ -369,6 +381,18 @@ rules are **taint-driven** — they fire only when input traces to a real source
 G101 hardcoded-credential detection is name-pattern based, so gitleaks/trivy
 remain the reliable TD-016 net on Go.
 
+A **`phpstan` provider** (optional, single pinned PHAR — needs PHP ≥ 8.1) gives
+PHP the structural/type checks Semgrep can't: undefined classes, methods and
+functions — the hallmark of AI hallucination. Gated: runs only when
+`vendor/autoload.php` exists (a composer-installed app); framework apps run only
+when the matching extension is in `vendor/` (larastan, phpstan-symfony,
+phpstan-doctrine), otherwise skipped with a note — framework magic (facades/DI)
+floods level-5 analysis with false positives. A minimal level-5 neon is
+generated in the OS temp dir (Pimcore's dynamic-constants stub included). Only
+the hallucination class is reported (`*.notFound` / `*.undefined` identifiers);
+style (ergebnis/*) and type-mismatch noise is dropped, so the QA advisory
+section stays a sharp signal. All phpstan findings are **advisories** (unscored).
+
 **Catalog enrichment (single source of truth for scoring):** every finding that
 maps to a `teardownId` — from semgrep, bandit or gosec — is enriched from
 `catalog/teardowns.json` (`src/catalog.mjs` → `enrichTeardowns`): its `severity`,
@@ -377,14 +401,12 @@ severity guess. This keeps scoring consistent — a command injection scores
 `critical` whether semgrep, bandit or gosec flagged it — and fills the
 `fixSummary` for bandit/gosec findings that previously shipped without one.
 
-**Language-native SAST scope note:** Psalm is deliberately **not** wired —
-Semgrep's PHP rulesets already cover the same pattern classes, and Psalm false
-positives heavily on framework-heavy PHP (e.g. Pimcore). phpstan is likewise
-project-scoped (needs per-project config to be useful), so it is deferred. When
-PHP coverage needs deepening, vendor Semgrep's `p/php`, `p/phpcs-security-audit`
-and `p/owasp-top-ten` rulesets into `rules/` instead of referencing the live
-Semgrep Registry — registry rulesets download at runtime, which would break the
-offline guarantee.
+**Language-native SAST scope note:** Psalm is deliberately **not** wired — the
+vendored Semgrep PHP packs + phpstan cover the same classes, and Psalm false
+positives heavily on framework-heavy PHP (e.g. Pimcore). The `p/phpcs-security-audit`
+pack is not yet vendored (it lives outside `semgrep-rules`' `php/` tree) — a
+follow-up, along with PHP variants for TD-002 (LLM raw fetch) and TD-050
+(payment webhook).
 
 ### 5.8 Setup & onboarding (the installer)
 
