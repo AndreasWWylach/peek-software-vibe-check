@@ -98,6 +98,7 @@
  * @property {number} version — config schema version.
  * @property {string} engine — minimum engine semver range.
  * @property {string[]} targets — paths to scan, relative to repo root.
+ * @property {string[]} exclude — repo-relative path prefixes to skip (normalized).
  * @property {string[]} languages — detected languages (may be empty).
  * @property {string[]} enabledRules — facet-gated `TD-###` subset.
  * @property {Record<string, unknown>} ruleParams — reserved (v2).

@@ -93,7 +93,9 @@ export function buildTenantRuleYaml(columnOrColumns) {
     '      - typescript',
     '      - javascript',
     '    severity: ERROR',
-    `    message: Prisma data query ${scope}.`,
+    // Quote the message: the multi-column scope lists columns after a colon
+    // ("expected one of: a, b"), which would otherwise parse as a YAML mapping.
+    `    message: "Prisma data query ${scope}."`,
     '    metadata:',
     '      peek:',
     '        teardownId: TD-008',

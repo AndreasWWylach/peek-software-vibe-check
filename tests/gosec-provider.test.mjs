@@ -61,6 +61,7 @@ function makeConfig(languages) {
     languages,
     enabledRules: [],
     ruleParams: {},
+    exclude: [],
     scoring: { weights: { security: 1, runtime: 1, architecture: 1, qa: 1 } },
     quiz: undefined,
   };

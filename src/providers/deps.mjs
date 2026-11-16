@@ -20,7 +20,7 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative } from 'node:path';
-import { hasNonCodeExt, isIgnoredDir } from '../ignore.mjs';
+import { isIgnoredDir } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').RunContext} RunContext */

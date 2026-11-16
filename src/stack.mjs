@@ -13,7 +13,7 @@
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
-import { IGNORED_DIRS } from './ignore.mjs';
+import { IGNORED_DIRS, isTestFile } from './ignore.mjs';
 
 /** package.json dependency name → stack marker. */
 const DEP_MARKERS = /** @type {Record<string, string>} */ (
@@ -146,6 +146,10 @@ function walk(dir, repoRoot, markers, rulesFiles, state) {
   for (const entry of entries) {
     if (entry.isSymbolicLink()) continue;
     const abs = join(dir, entry.name);
+    // Test/fixture files (and whole test directories) never define the app's
+    // stack — a fixture string that exercises the Firestore client SDK must
+    // not make the engine think the repo ships a Firebase app.
+    if (isTestFile(toRepoFile(abs, repoRoot))) continue;
     if (entry.isDirectory()) {
       if (IGNORED_DIRS.has(entry.name)) continue;
       walk(abs, repoRoot, markers, rulesFiles, state);

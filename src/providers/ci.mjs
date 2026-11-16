@@ -17,7 +17,6 @@
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { isIgnoredDir } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').RunContext} RunContext */

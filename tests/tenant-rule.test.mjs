@@ -57,6 +57,12 @@ test('buildTenantRuleYaml accepts multiple columns (auto-detected set)', () => {
   assert.ok(yaml.includes('id_organizationId'));
   assert.ok(yaml.includes('id_workspaceId'));
   assert.ok(yaml.includes('expected one of: organizationId, workspaceId'));
+  // The multi-column message lists columns after a colon — it must be quoted so
+  // the generated YAML stays valid (a bare `:` would parse as a mapping).
+  assert.ok(
+    yaml.includes('message: "Prisma data query lacks tenant scope (expected one of:'),
+    'multi-column message must be YAML-quoted',
+  );
 });
 
 test('detectTenantColumns finds tenant columns and ignores user/client ids', () => {
@@ -124,6 +130,28 @@ test(
       assert.ok(count('td-008.vulnerable.findmany.ts') > 0, 'unscoped findMany must fire');
       assert.equal(count('td-008.hardened.ts'), 0, 'scoped update must stay silent');
       assert.equal(count('td-008.hardened.findmany.ts'), 0, 'scoped findMany must stay silent');
+    } finally {
+      rmSync(repoRulesTmp, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'multi-column tenant rule is valid YAML that semgrep accepts',
+  { skip: semgrepAvailable ? false : 'semgrep not installed — tenant-rule test skipped' },
+  () => {
+    // Regression for a colon in the unquoted multi-column message producing
+    // "Invalid YAML … mapping values are not allowed here".
+    const repoRulesTmp = fileURLToPath(new URL('./.tmp-tenant-rule-multi', import.meta.url));
+    const rule = materializeTenantRule(['organizationId', 'workspaceId'], repoRulesTmp);
+    const fixturesDir = fileURLToPath(new URL('./golden/fixtures/td-008', import.meta.url));
+    try {
+      const stdout = runCommand('semgrep', [
+        '--config', rule, '--json',
+        join(fixturesDir, 'td-008.vulnerable.ts'),
+      ]);
+      const parsed = JSON.parse(stdout);
+      assert.ok(Array.isArray(parsed.results), 'semgrep must parse the rule and return results');
     } finally {
       rmSync(repoRulesTmp, { recursive: true, force: true });
     }

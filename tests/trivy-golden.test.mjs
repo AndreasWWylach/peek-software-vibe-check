@@ -9,7 +9,6 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { commandAvailable, runCommandCapture } from '../src/proc.mjs';
 import { parseTrivyJson } from '../src/providers/trivy.mjs';

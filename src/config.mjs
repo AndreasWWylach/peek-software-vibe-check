@@ -60,6 +60,7 @@ export async function loadConfig(configPath) {
     languages: data.languages ?? [],
     enabledRules: data.enabledRules ?? [],
     ruleParams: data.ruleParams ?? {},
+    exclude: data.exclude ?? [],
     scoring: { weights },
   });
 

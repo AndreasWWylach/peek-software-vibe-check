@@ -65,15 +65,24 @@ export async function run(configPath, options) {
   // `targets` are a hint from the manifest intake — but the upload may miss
   // whole folders (e.g. `shared/`). The engine runs on the full repo, so it
   // auto-includes any top-level directory containing source code of the
-  // configured languages. No silently unchecked code.
+  // configured languages. No silently unchecked code. The config may `exclude`
+  // repo-relative path prefixes (fixtures, vendored code) from both explicit
+  // targets and auto-included dirs.
+  const excludes = (config.exclude ?? []).map(normalizeRelPath);
   const configured = new Set(config.targets.map((target) => target.replace(/[/\\]+$/, '')));
   const autoIncluded = discoverSourceDirs(options.repoRoot, config.languages)
-    .filter((dir) => !configured.has(dir.replace(/\/$/, '')));
+    .filter((dir) => !configured.has(dir.replace(/\/$/, '')))
+    .filter((dir) => !isExcludedPath(excludes, dir));
+  const explicitTargets = config.targets.filter((target) => !isExcludedPath(excludes, target));
+  const excludedConfigured = config.targets.filter((target) => isExcludedPath(excludes, target));
+  if (excludedConfigured.length > 0) {
+    log(`  excluded configured target(s): ${excludedConfigured.join(', ')}`);
+  }
   if (autoIncluded.length > 0) {
     log(`  auto-included source dir(s) not in config: ${autoIncluded.join(', ')}`);
   }
   const targets = [
-    ...config.targets.map((target) => resolve(options.repoRoot, target)),
+    ...explicitTargets.map((target) => resolve(options.repoRoot, target)),
     ...autoIncluded.map((dir) => resolve(options.repoRoot, dir)),
   ];
 
@@ -149,4 +158,31 @@ export async function run(configPath, options) {
   log(`wrote peek-report.json + AUDIT-REPORT.md`);
 
   return report;
+}
+
+/**
+ * Normalize a repo-relative path for exclude matching: forward slashes, no
+ * trailing slash.
+ * @param {string} path
+ * @returns {string}
+ */
+function normalizeRelPath(path) {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+/**
+ * Does a repo-relative path match an exclude entry (exact dir or prefix)?
+ * `"examples/"` skips the whole `examples/` subtree; `"docs/legacy"` skips just
+ * that directory. Both sides are normalized here (forward slashes, no trailing
+ * slash), so callers may pass entries verbatim from the config.
+ * @param {string[]} excludes — repo-relative entries (e.g. `"examples/"`).
+ * @param {string} repoPath — repo-relative path (may carry a trailing slash).
+ * @returns {boolean}
+ */
+export function isExcludedPath(excludes, repoPath) {
+  const normalized = normalizeRelPath(repoPath);
+  return excludes.some((exclude) => {
+    const entry = normalizeRelPath(exclude);
+    return normalized === entry || normalized.startsWith(`${entry}/`);
+  });
 }

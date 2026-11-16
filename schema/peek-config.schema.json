@@ -20,6 +20,13 @@
       "minItems": 1,
       "items": { "type": "string", "minLength": 1 }
     },
+    "exclude": {
+      "type": "array",
+      "description": "Repo-relative path prefixes to skip (e.g. \"examples/\", \"vendor/\"). Applies to both explicit targets and auto-included source dirs.",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "default": []
+    },
     "languages": {
       "type": "array",
       "description": "Detected languages/frameworks (may be empty; used to gate rule variants).",

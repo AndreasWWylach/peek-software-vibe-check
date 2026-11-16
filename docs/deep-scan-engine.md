@@ -163,6 +163,7 @@ A new backend endpoint (e.g. `POST /api/generate-scan-config`) that takes quiz a
   "version": 1,
   "engine": ">=0.1.0",
   "targets": ["src/", "backend/"],          // derived from manifest
+  "exclude": ["vendor/", "examples/"],       // optional — paths skipped (targets + auto-include)
   "languages": ["typescript", "python"],
   "enabledRules": ["TD-002", "TD-008", ...], // facet-gated subset
   "ruleParams": { "tenantColumn": null },     // optional manual override — the engine auto-detects it
@@ -182,6 +183,11 @@ manifest, and the quiz only feeds the optional `quiz` block. So the quiz is
 "continue with the quiz" (calibrated self-report overlay). The engine already
 treats `quiz` as optional — no engine change required; the generator just emits
 the `quiz` block only when answers exist.
+
+`exclude` is an optional list of repo-relative path prefixes that are skipped by
+every provider (both the explicit `targets` and the auto-included source dirs).
+It is the escape hatch for vendored/generated/fixture code that is not part of
+the app under audit.
 
 ### 5.4 Engine pipeline
 
@@ -219,7 +225,9 @@ independent of the config `targets` (which are only a hint for source scanning),
 so Firebase/Firestore is detected even when the manifest intake didn't list the
 repo root. Framework-specific rules (Firestore/Storage security rules, and later
 Prisma/Express) are gated on those markers, and the report opens with an App
-Stack summary. No per-service intake questions.
+Stack summary. No per-service intake questions. Test and fixture files never
+define the stack — a fixture string that calls the Firestore SDK must not make
+the engine think the repo ships a Firebase app.
 
 ### 5.5 Ecosystem & language matrix
 
