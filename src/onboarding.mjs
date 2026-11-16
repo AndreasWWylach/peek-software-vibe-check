@@ -193,6 +193,22 @@ export const TOOLS = [
       },
     },
   },
+  {
+    id: 'hadolint',
+    name: 'hadolint',
+    role: 'Dockerfile quality & hygiene lint (optional).',
+    required: false,
+    minVersion: [2, 0, 0],
+    install: {
+      kind: 'download',
+      summary: 'Download hadolint v2.12.0 (linux amd64)',
+      source: 'https://github.com/hadolint/hadolint',
+      url: 'https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64',
+      sha256: '56de6d5e5ec427e17b74fa48d51271c7fc0d61244bf5c90e828aab8362d55010',
+      archive: 'none',
+      binary: 'hadolint',
+    },
+  },
 ];
 
 /**

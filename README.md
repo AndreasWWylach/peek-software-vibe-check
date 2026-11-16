@@ -2,7 +2,7 @@
 
 Open-source, local deep-scan engine for [peek.software](https://peek.software). It turns Peek's teardown catalog into an executable audit of your codebase — running **entirely on your machine, against your own source code**.
 
-> **Status:** Shipped — the engine scans real repos end-to-end with twelve providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
+> **Status:** Shipped — the engine scans real repos end-to-end with thirteen providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
 
 ## Trust statement
 
@@ -21,6 +21,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [gitleaks](https://github.com/gitleaks/gitleaks) — secrets → hardcoded-secret findings (core)
 - [eslint](https://eslint.org) **9** — language linter → QA hygiene findings (core)
 - [checkov](https://www.checkov.io) — IaC misconfiguration + IAM wildcard scanning (optional)
+- [hadolint](https://github.com/hadolint/hadolint) — Dockerfile quality & hygiene lint (optional)
 
 The **tests**, **dependency-hygiene**, **security-headers**, **CI** and **Firebase** providers are built into the engine — no binary to install.
 
@@ -79,7 +80,7 @@ npm test             # node:test — unit + parser + golden + integration tests
 npm run typecheck    # tsc --noEmit (JSDoc type-checked, @ts-check)
 ```
 
-Install the seven provider binaries to run the full suite (unit + parser tests run
+Install the eight provider binaries to run the full suite (unit + parser tests run
 without them; golden + integration tests skip when a binary is missing):
 
 ```bash
@@ -101,6 +102,10 @@ install -m 0755 /tmp/gitleaks ~/.local/bin/gitleaks
 curl -sSL -o ~/.local/bin/osv-scanner \
   https://github.com/google/osv-scanner/releases/download/v2.7.1/osv-scanner_linux_amd64
 chmod +x ~/.local/bin/osv-scanner
+# hadolint (Linux amd64):
+curl -sSL -o ~/.local/bin/hadolint \
+  https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+chmod +x ~/.local/bin/hadolint
 ```
 
 - **Golden tests** (`tests/golden.test.mjs`) run each custom Semgrep rule against

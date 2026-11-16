@@ -124,6 +124,7 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │       ├── headers.mjs        # security-header absence for server frameworks (advisory)
 │       ├── ci.mjs             # CI pipeline: no-pipeline / no-tests / no-coverage (advisory)
 │       ├── checkov.mjs        # IaC misconfiguration + IAM wildcards (checkov, optional)
+│       ├── hadolint.mjs       # Dockerfile quality & hygiene lint (hadolint, optional)
 │       ├── eslint.mjs         # language-linter hygiene (QA)
 │       ├── tests.mjs          # test presence + assertion heuristic (QA)
 │       └── firebase.mjs       # Firestore/Storage security-rules boundary (QA → security)
@@ -191,6 +192,7 @@ config ──▶ validate
         │     deps (missing lockfile · floating versions)           ──▶ hygiene findings
         │     headers (security-header absence) · ci (pipeline)      ──▶ hygiene findings
         │     checkov (IaC misconfig · IAM wildcards)               ──▶ hygiene findings
+        │     hadolint (Dockerfile lint)                            ──▶ hygiene findings
         │     ESLint (linter) · tests (presence/assertions)         ──▶ hygiene + QA findings
         │     Firebase/Firestore (security rules)                    ──▶ teardown findings
         ──▶ dedup (same teardownId + file/line collapses)
@@ -313,6 +315,11 @@ scored high). Best-practice MEDIUM/LOW checks are advisories. It runs targeted
 secrets), and handles checkov 3.x's array-shaped JSON with null severity via a
 curated fallback map. Terrascan is a documented alternative (Go binary, Rego)
 but not wired — the registry makes adding it later a ~30-line provider.
+
+A **`hadolint` provider** (optional, single binary) lints Dockerfiles for quality
+and hygiene (pin image tags, pin apt/npm versions, JSON CMD, pipefail). It is
+the Dockerfile-*quality* counterpart to checkov's Dockerfile-*security* checks;
+both report as **advisories** (runtime infra posture, not scored).
 
 ### 5.8 Setup & onboarding (the installer)
 

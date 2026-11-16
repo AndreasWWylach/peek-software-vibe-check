@@ -183,7 +183,11 @@ function toFinding(result, repoRoot) {
   const line = typeof range[0] === 'number' ? /** @type {number} */ (range[0]) : null;
 
   const title = checkName;
-  const resource = result.resource ? ` — resource: ${String(result.resource)}` : '';
+  // checkov's `resource` is a meaningful address for Terraform/K8s (e.g.
+  // `aws_iam_policy.wild`) but an absolute file path for Dockerfile checks —
+  // only keep it when it is not a path (avoid leaking local absolute paths).
+  const rawResource = String(result.resource ?? '');
+  const resource = rawResource && !rawResource.startsWith('/') ? ` — resource: ${rawResource}` : '';
   const fixSummary = result.guideline ? String(result.guideline) : null;
 
   // Dockerfile/container checks are runtime-infra posture, not app security.

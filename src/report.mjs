@@ -77,7 +77,7 @@ export function renderMarkdown(report) {
   lines.push('## Findings Summary');
   lines.push('| Check | Findings | What |');
   lines.push('| --- | ---: | --- |');
-  lines.push(...renderSummary(codeFindings, dependencies, testFindings));
+  lines.push(...renderSummary(codeFindings, dependencies, testFindings, advisories));
   if (advisories.length > 0) {
     lines.push(`_${advisories.length} advisory finding(s) are reported below and are not scored._`);
   }
@@ -302,12 +302,13 @@ function topCodeIssue(codeFindings) {
 
 /**
  * Render the per-provider "Findings Summary" table rows.
- * @param {Finding[]} codeFindings
+ * @param {Finding[]} codeFindings — scored findings.
  * @param {import('./types.mjs').DependencySummary | undefined} dependencies
  * @param {Finding[]} testFindings — in-test findings, counted but not scored.
+ * @param {Finding[]} advisories — reported but not scored.
  * @returns {string[]}
  */
-function renderSummary(codeFindings, dependencies, testFindings) {
+function renderSummary(codeFindings, dependencies, testFindings, advisories) {
   /** @type {Map<string, Finding[]>} */
   const byProvider = new Map();
   for (const finding of codeFindings) {
@@ -316,7 +317,15 @@ function renderSummary(codeFindings, dependencies, testFindings) {
     if (list) list.push(finding);
     else byProvider.set(provider, [finding]);
   }
-  const order = ['semgrep', 'gitleaks', 'firebase', 'madge', 'deps', 'headers', 'ci', 'checkov', 'scc', 'eslint', 'tests', 'osv'];
+  /** @type {Map<string, Finding[]>} */
+  const advisoriesByProvider = new Map();
+  for (const finding of advisories) {
+    const provider = finding.source?.provider ?? 'unknown';
+    const list = advisoriesByProvider.get(provider);
+    if (list) list.push(finding);
+    else advisoriesByProvider.set(provider, [finding]);
+  }
+  const order = ['semgrep', 'gitleaks', 'firebase', 'madge', 'deps', 'headers', 'ci', 'checkov', 'hadolint', 'scc', 'eslint', 'tests', 'osv'];
   /** @type {string[]} */
   const lines = [];
   for (const provider of order) {
@@ -328,12 +337,21 @@ function renderSummary(codeFindings, dependencies, testFindings) {
       }
       continue;
     }
-    const list = byProvider.get(provider) ?? [];
-    if (list.length === 0) {
+    const scored = byProvider.get(provider) ?? [];
+    const advisory = advisoriesByProvider.get(provider) ?? [];
+    if (scored.length === 0 && advisory.length === 0) {
       lines.push(`| ${provider} | 0 | — |`);
       continue;
     }
-    lines.push(`| ${provider} | ${list.length} | ${summarizeGroup(list)} |`);
+    const counts = scored.length > 0 ? `${scored.length}` : '0';
+    const findingsCell = advisory.length > 0 ? `${counts} · ${advisory.length} advisory` : counts;
+    const what = [
+      scored.length > 0 ? summarizeGroup(scored) : null,
+      advisory.length > 0 ? `advisory: ${summarizeGroup(advisory)}` : null,
+    ]
+      .filter((part) => part !== null)
+      .join(' · ');
+    lines.push(`| ${provider} | ${findingsCell} | ${what} |`);
   }
   if (testFindings.length > 0) {
     lines.push(`| test files (not scored) | ${testFindings.length} | ${summarizeGroup(testFindings)} |`);

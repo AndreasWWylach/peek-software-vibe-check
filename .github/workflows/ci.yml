@@ -61,6 +61,14 @@ jobs:
       - name: Install checkov
         run: pipx install checkov
 
+      # hadolint runs the Dockerfile quality & hygiene provider.
+      - name: Install hadolint
+        run: |
+          curl -sSL -o "$HOME/.local/bin/hadolint" \
+            https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
+          chmod +x "$HOME/.local/bin/hadolint"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
