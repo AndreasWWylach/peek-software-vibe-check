@@ -403,10 +403,11 @@ severity guess. This keeps scoring consistent — a command injection scores
 
 **Language-native SAST scope note:** Psalm is deliberately **not** wired — the
 vendored Semgrep PHP packs + phpstan cover the same classes, and Psalm false
-positives heavily on framework-heavy PHP (e.g. Pimcore). The `p/phpcs-security-audit`
-pack is not yet vendored (it lives outside `semgrep-rules`' `php/` tree) — a
-follow-up, along with PHP variants for TD-002 (LLM raw fetch) and TD-050
-(payment webhook).
+positives heavily on framework-heavy PHP (e.g. Pimcore). `p/phpcs-security-audit`
+needs no separate vendoring: its nine rules are a curated subset of the
+`php/lang` pack already committed. PHP variants now exist for every TD with a
+PHP-expressible pattern (TD-002 LLM raw fetch and TD-050 payment webhook
+included).
 
 ### 5.8 Setup & onboarding (the installer)
 

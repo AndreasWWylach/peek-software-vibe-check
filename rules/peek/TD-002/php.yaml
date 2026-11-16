@@ -1,0 +1,43 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from
+# peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-002 — LLM call without a max_tokens cap (PHP: openai-php client + raw body).
+rules:
+  - id: peek-td-002-unbounded-llm-tokens-php
+    languages:
+      - php
+    severity: ERROR
+    message: LLM call without a max_tokens cap — output is unbounded and spend is unconstrained.
+    metadata:
+      peek:
+        teardownId: TD-002
+        pillar: runtime
+        severity: critical
+        title: LLM call without a token cap
+        fixSummary: Cap max_tokens, require auth, and rate-limit per user.
+      category: runtime
+    patterns:
+      - pattern: '$CLIENT->chat()->create([...])'
+      - pattern-not: '$CLIENT->chat()->create([..., "max_tokens" => $CAP, ...])'
+      - pattern-not: '$CLIENT->chat()->create([..., "max_completion_tokens" => $CAP, ...])'
+
+  - id: peek-td-002-unbounded-llm-body-php
+    languages:
+      - php
+    severity: ERROR
+    message: LLM request body without a max_tokens cap — output is unbounded and spend is unconstrained.
+    metadata:
+      peek:
+        teardownId: TD-002
+        pillar: runtime
+        severity: critical
+        title: LLM call without a token cap
+        fixSummary: Cap max_tokens, require auth, and rate-limit per user.
+      category: runtime
+    patterns:
+      - pattern-either:
+          - pattern: '["model" => $MODEL, "messages" => $MESSAGES]'
+          - pattern: '["messages" => $MESSAGES, "model" => $MODEL]'
+      - pattern-not: '["max_tokens" => $CAP]'
+      - pattern-not: '["max_completion_tokens" => $CAP]'

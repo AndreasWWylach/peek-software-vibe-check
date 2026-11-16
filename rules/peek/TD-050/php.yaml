@@ -1,0 +1,78 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from
+# peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-050 — Unverified payment webhook (PHP).
+#
+# A webhook-named handler (Symfony controller / Laravel closure) that reads the
+# request body and acts on it without verifying the provider signature. The
+# "verified" variants (Stripe `constructEvent` / PayPal `verifyWebhookSignature`)
+# are mirrored as pattern-not — both as bare calls and static-method calls.
+rules:
+  - id: peek-td-050-unverified-webhook-php
+    languages:
+      - php
+    severity: ERROR
+    message: Webhook handler acts on the request body without verifying the provider signature — anyone can forge a webhook and flip billing state.
+    metadata:
+      peek:
+        teardownId: TD-050
+        pillar: security
+        severity: critical
+        title: Unverified payment webhook
+        fixSummary: Verify the signature before acting (Stripe uses Webhook::constructEvent on the raw body; PayPal uses verifyWebhookSignature).
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: |
+              function $NAME($REQUEST)
+              {
+                ...
+                $REQUEST->getContent();
+                ...
+              }
+          - pattern: |
+              function $NAME($REQUEST)
+              {
+                ...
+                $REQUEST->toArray();
+                ...
+              }
+          - pattern: |
+              function $NAME($REQUEST)
+              {
+                ...
+                $REQUEST->all();
+                ...
+              }
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: '(?i).*(webhook|stripe|paypal).*'
+      - pattern-not: |
+          function $NAME($REQUEST)
+          {
+            ...
+            constructEvent(...);
+            ...
+          }
+      - pattern-not: |
+          function $NAME($REQUEST)
+          {
+            ...
+            $ANY::constructEvent(...);
+            ...
+          }
+      - pattern-not: |
+          function $NAME($REQUEST)
+          {
+            ...
+            verifyWebhookSignature(...);
+            ...
+          }
+      - pattern-not: |
+          function $NAME($REQUEST)
+          {
+            ...
+            $ANY::verifyWebhookSignature(...);
+            ...
+          }
