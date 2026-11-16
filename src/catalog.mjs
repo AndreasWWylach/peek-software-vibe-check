@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 /** @typedef {import('./types.mjs').Pillar} Pillar */
 /** @typedef {import('./types.mjs').Severity} Severity */
+/** @typedef {import('./types.mjs').Finding} Finding */
 
 /**
  * A single teardown fact entry (mirrors the snapshot format).
@@ -66,4 +67,27 @@ export async function lookupTeardown(teardownId) {
 export async function listTeardowns() {
   const map = await loadIndex();
   return [...map.values()];
+}
+
+/**
+ * Enrich teardown-mapped findings with vendored catalog facts.
+ *
+ * The teardown's `severity`/`pillar`/`fixSummary` in the catalog are the single
+ * source of truth for scoring — so the same defect scores identically no matter
+ * which provider flagged it (semgrep, bandit, gosec, …). A provider's own
+ * severity is only a fallback until the catalog fact resolves.
+ *
+ * @param {Finding[]} findings
+ * @returns {Promise<Finding[]>} the same array, enriched in place.
+ */
+export async function enrichTeardowns(findings) {
+  for (const finding of findings) {
+    if (!finding.teardownId) continue;
+    const fact = await lookupTeardown(finding.teardownId);
+    if (!fact) continue;
+    finding.fixSummary = finding.fixSummary ?? fact.fixSummary;
+    finding.severity = fact.severity;
+    finding.pillar = fact.pillar;
+  }
+  return findings;
 }

@@ -225,6 +225,40 @@ export const TOOLS = [
       binary: 'trivy',
     },
   },
+  {
+    id: 'bandit',
+    name: 'bandit',
+    role: 'Python security SAST (optional).',
+    required: false,
+    minVersion: [1, 0, 0],
+    install: {
+      kind: 'command',
+      summary: 'Install bandit via pipx (falls back to pip)',
+      source: 'https://bandit.readthedocs.io',
+      commands: {
+        default:
+          'if command -v pipx >/dev/null 2>&1; then pipx install bandit; ' +
+          'elif command -v pip3 >/dev/null 2>&1; then pip3 install --user bandit; ' +
+          'else echo "bandit needs pipx or pip — run the semgrep/checkov installer first"; exit 1; fi',
+      },
+    },
+  },
+  {
+    id: 'gosec',
+    name: 'gosec',
+    role: 'Go security SAST (optional).',
+    required: false,
+    minVersion: [2, 20, 0],
+    install: {
+      kind: 'download',
+      summary: 'Download gosec v2.30.0 (linux amd64)',
+      source: 'https://github.com/securego/gosec',
+      url: 'https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_linux_amd64.tar.gz',
+      sha256: '3fcce2c4e802ff4169217874602a7df355e9a37bcb6ffaa34b08f3d5f336cdfb',
+      archive: 'tar.gz',
+      binary: 'gosec',
+    },
+  },
 ];
 
 /**

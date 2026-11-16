@@ -13,7 +13,7 @@ bash setup.sh
 `setup.sh` checks for Node ≥ 22 (printing the exact install command if it's
 missing), clones the pinned engine release, installs its single runtime
 dependency, exposes `vibe-check` on your PATH, and runs the **onboarding** to
-install the provider tools (semgrep, osv-scanner, madge, scc, gitleaks, eslint, and optional checkov + hadolint + trivy).
+install the provider tools (semgrep, osv-scanner, madge, scc, gitleaks, eslint, and optional checkov + hadolint + trivy + bandit + gosec).
 The **tests**, dependency-hygiene, security-headers, CI and Firebase providers are built into the engine — no install. Everything prints
 before it runs, and you can interrupt at any time — re-run to resume.
 

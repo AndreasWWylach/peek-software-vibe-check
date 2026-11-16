@@ -77,6 +77,18 @@ jobs:
           tar -xzf /tmp/trivy.tar.gz -C "$HOME/.local/bin" trivy
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
+      # bandit runs the Python SAST provider (e2e test).
+      - name: Install bandit
+        run: pipx install bandit
+
+      # gosec runs the Go SAST provider (e2e test).
+      - name: Install gosec
+        run: |
+          curl -sSL -o /tmp/gosec.tar.gz \
+            https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_linux_amd64.tar.gz
+          tar -xzf /tmp/gosec.tar.gz -C "$HOME/.local/bin" gosec
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test

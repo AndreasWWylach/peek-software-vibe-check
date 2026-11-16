@@ -126,6 +126,8 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │       ├── checkov.mjs        # IaC misconfiguration + IAM wildcards (checkov, optional)
 │       ├── hadolint.mjs       # Dockerfile quality & hygiene lint (hadolint, optional)
 │       ├── trivy.mjs          # filesystem vuln + secret scanning (trivy, optional)
+│       ├── bandit.mjs         # Python security SAST (bandit, optional, Python repos)
+│       ├── gosec.mjs          # Go security SAST (gosec, optional, Go repos)
 │       ├── eslint.mjs         # language-linter hygiene (QA)
 │       ├── tests.mjs          # test presence + assertion heuristic (QA)
 │       └── firebase.mjs       # Firestore/Storage security-rules boundary (QA → security)
@@ -195,6 +197,7 @@ config ──▶ validate
         │     checkov (IaC misconfig · IAM wildcards)               ──▶ hygiene findings
         │     hadolint (Dockerfile lint)                            ──▶ hygiene findings
         │     trivy (vuln · secrets)                                ──▶ dependency + hygiene findings
+        │     bandit (Python SAST) · gosec (Go SAST)                ──▶ teardown + hygiene findings
         │     ESLint (linter) · tests (presence/assertions)         ──▶ hygiene + QA findings
         │     Firebase/Firestore (security rules)                    ──▶ teardown findings
         ──▶ dedup (same teardownId + file/line collapses)
@@ -275,7 +278,8 @@ Two cross-cutting requirements:
 | | govulncheck | reachability-aware Go vulns | go facet |
 | | Trivy | container + IaC misconfig | runtime facet, ships containers |
 | | hadolint | Dockerfile lint | runtime facet |
-| **Later (if helpful)** | Bandit / Brakeman / gosec / Psalm / SpotBugs+FindSecBugs | ecosystem-native SAST per language | detected language |
+| **Ecosystem SAST** | Bandit (Python) · gosec (Go) | per-language dataflow/taint (TD-016/033/042) | detected language |
+| **Later (if helpful)** | Brakeman / SpotBugs+FindSecBugs | ecosystem-native SAST for other languages | detected language |
 | | Garak / Promptfoo | LLM probing (TD-014) — needs live endpoint | llm facet, opt-in |
 | | dependency-cruiser / ArchUnit / deptrac / Madge | architecture graph (TD-021) | architecture facet |
 | | radon / scc / tokei | complexity + size metrics (TD-019) | qa / architecture facet |
@@ -336,6 +340,43 @@ annotated `corroboratedBy`, rendered as *"confirmed by trivy"*. Agreement is a
 confidence signal, not noise. Note trivy's secret engine embeds gitleaks' rules,
 so its secret overlap is weaker confirmation than its independent vulnerability
 DB (trivy vs OSV), which is the genuinely independent check.
+
+A **`bandit` provider** (optional, `pipx install bandit`) gives Python the
+dataflow/pattern checks our Semgrep pattern rules can't fully cover. It is
+**language-gated** via `applicable(config)` — it only runs when `python` is in
+the config's detected languages, so mixed repos get Bandit only on their Python
+part. Known ids map to teardowns (B608 → TD-033 SQLi, B60x shell → TD-042,
+B105/B106 → TD-016) so they dedup + corroborate with semgrep/gitleaks by
+`teardownId`+file:line; every other Bandit id is a hygiene advisory. Noisy ids
+that carry no security signal (`B101` assert usage, `B110` try/except-pass) are
+dropped entirely rather than cluttering the advisory section.
+
+A **`gosec` provider** (optional, single binary) gives Go the same coverage via
+its taint/pattern rules. Also language-gated (`go` in the detected languages),
+and requires a `go.mod`/`go.sum` at the repo root (subdir Go modules are a
+documented limitation). G201/G202/G701 → TD-033, G204/G702 → TD-042, G101 →
+TD-016; everything else is advisory. Caveat (verified on gosec 2.30.0): its SQL
+rules are **taint-driven** — they fire only when input traces to a real source
+(`os.Args`/`http.Request`), so plain function parameters are not flagged; and
+G101 hardcoded-credential detection is name-pattern based, so gitleaks/trivy
+remain the reliable TD-016 net on Go.
+
+**Catalog enrichment (single source of truth for scoring):** every finding that
+maps to a `teardownId` — from semgrep, bandit or gosec — is enriched from
+`catalog/teardowns.json` (`src/catalog.mjs` → `enrichTeardowns`): its `severity`,
+`pillar` and `fixSummary` come from the catalog, never from the tool's own
+severity guess. This keeps scoring consistent — a command injection scores
+`critical` whether semgrep, bandit or gosec flagged it — and fills the
+`fixSummary` for bandit/gosec findings that previously shipped without one.
+
+**Language-native SAST scope note:** Psalm is deliberately **not** wired —
+Semgrep's PHP rulesets already cover the same pattern classes, and Psalm false
+positives heavily on framework-heavy PHP (e.g. Pimcore). phpstan is likewise
+project-scoped (needs per-project config to be useful), so it is deferred. When
+PHP coverage needs deepening, vendor Semgrep's `p/php`, `p/phpcs-security-audit`
+and `p/owasp-top-ten` rulesets into `rules/` instead of referencing the live
+Semgrep Registry — registry rulesets download at runtime, which would break the
+offline guarantee.
 
 ### 5.8 Setup & onboarding (the installer)
 
@@ -439,8 +480,8 @@ No rule ships until both assertions pass. This is what prevents the scanner from
 | TD | Preferred provider (over Semgrep) |
 |---|---|
 | TD-016 (hardcoded secrets) | **Gitleaks** (adopted — entropy + allowlists; overlaps Semgrep's prefix regex, dedup collapses) |
-| TD-037 / TD-038 / TD-039 (Python RCE/SSTI) | Bandit |
-| TD-033 / TD-042 (SQLi / command injection) | taint — CodeQL · Psalm · gosec · Bandit |
+| TD-037 / TD-038 / TD-039 (Python RCE/SSTI) | Bandit (adopted — `B307` eval / `B301`–`B303` pickle fire as advisory today; not yet mapped to TD-037/038/039) |
+| TD-033 / TD-042 (SQLi / command injection) | taint — **Bandit** (adopted, Python) · **gosec** (adopted, Go) · CodeQL (later, needs build) |
 | TD-041 (prototype pollution) | CodeQL (JS) |
 | TD-014 (prompt injection) | Garak / Promptfoo (dynamic) |
 | TD-019 (monolithic file) | **scc** (adopted — file-size threshold, `ruleParams.maxFileLines`) |

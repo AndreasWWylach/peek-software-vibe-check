@@ -24,7 +24,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { commandAvailable, runCommand } from '../proc.mjs';
-import { lookupTeardown } from '../catalog.mjs';
+import { enrichTeardowns } from '../catalog.mjs';
 import { isIgnoredDir, isVendoredPath } from '../ignore.mjs';
 import { materializeTenantRule, readTenantColumn, detectTenantColumns } from './tenant-rule.mjs';
 
@@ -185,7 +185,7 @@ export const semgrepProvider = {
     const findings = parseSemgrepJson(stdout, ctx.repoRoot).filter(
       (finding) => !isIgnoredDir(finding.file) && !isVendoredPath(finding.file),
     );
-    return enrichFromCatalog(findings);
+    return enrichTeardowns(findings);
   },
 };
 
@@ -253,21 +253,4 @@ function toFinding(result, repoRoot) {
     // — used for weak hygiene signals that are policy judgments, not defects.
     advisory: peek.advisory === true,
   };
-}
-
-/**
- * Enrich teardown findings with vendored catalog facts (fixSummary etc.).
- * @param {Finding[]} findings
- * @returns {Promise<Finding[]>}
- */
-async function enrichFromCatalog(findings) {
-  for (const finding of findings) {
-    if (!finding.teardownId) continue;
-    const fact = await lookupTeardown(finding.teardownId);
-    if (!fact) continue;
-    finding.fixSummary = finding.fixSummary ?? fact.fixSummary;
-    finding.severity = fact.severity;
-    finding.pillar = fact.pillar;
-  }
-  return findings;
 }
