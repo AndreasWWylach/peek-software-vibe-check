@@ -1,0 +1,12 @@
+{
+  "source": "https://github.com/semgrep/semgrep-rules.git",
+  "pinnedSha": "a5ad1714f00c9f7fde980cab0ea1d6dc6d414fd2",
+  "vendoredAt": "2026-11-16",
+  "packs": [
+    "lang",
+    "laravel",
+    "symfony",
+    "doctrine",
+    "wordpress"
+  ]
+}
