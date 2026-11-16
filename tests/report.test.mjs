@@ -14,16 +14,16 @@ test('fixPath builds a finding-ID deep-link (no code, no secrets)', () => {
   assert.equal(fixPath([]), 'https://peek.software/fix?findings=');
 });
 
-test('renderMarkdown renders the Last Mile handoff with the found teardown IDs', () => {
+test('renderMarkdown links each teardown finding to its peek.software page', () => {
   const report = {
     engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
     generatedAt: '2026-11-13T00:00:00.000Z',
     riskScore: { total: 15, max: 350, tier: 'green', riskPercentage: 4 },
     pillars: [],
     findings: [
-      { kind: 'teardown', teardownId: 'TD-008', file: 'src/a.ts', line: 1, title: 'lookup by id', source: { provider: 'semgrep', ruleId: 'r1' } },
-      { kind: 'teardown', teardownId: 'TD-016', file: 'src/b.ts', line: 2, title: 'hardcoded secret', source: { provider: 'gitleaks', ruleId: 'generic-api-key' } },
-      { kind: 'hygiene', teardownId: null, file: 'src/c.ts', line: 3, title: 'unused var', source: { provider: 'eslint', ruleId: 'no-unused-vars' } },
+      { kind: 'teardown', teardownId: 'TD-008', pillar: 'security', severity: 'critical', file: 'src/a.ts', line: 1, title: 'lookup by id', source: { provider: 'semgrep', ruleId: 'r1' } },
+      { kind: 'teardown', teardownId: 'TD-016', pillar: 'security', severity: 'critical', file: 'src/b.ts', line: 2, title: 'hardcoded secret', source: { provider: 'gitleaks', ruleId: 'generic-api-key' } },
+      { kind: 'hygiene', teardownId: null, pillar: 'qa', severity: 'low', file: 'src/c.ts', line: 3, title: 'unused var', source: { provider: 'eslint', ruleId: 'no-unused-vars' } },
     ],
     dependencies: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
     skippedProviders: [],
@@ -31,7 +31,10 @@ test('renderMarkdown renders the Last Mile handoff with the found teardown IDs',
   };
 
   const markdown = renderMarkdown(/** @type {any} */ (report));
-  assert.ok(markdown.includes('https://peek.software/fix?findings=TD-008,TD-016'), markdown);
+  assert.ok(markdown.includes('https://peek.software/teardowns/TD-008'), markdown);
+  assert.ok(markdown.includes('https://peek.software/teardowns/TD-016'), markdown);
+  // The Last Mile hand-off block was removed from the report.
+  assert.ok(!markdown.includes('https://peek.software/fix?findings='), markdown);
 });
 
 test('renderMarkdown lists dependency CVEs in a separate section, not in the code score', () => {
@@ -66,7 +69,7 @@ test('renderMarkdown lists dependency CVEs in a separate section, not in the cod
   assert.ok(markdown.includes('Your code:** 0 / 350'), markdown);
 });
 
-test('renderMarkdown keeps a plain Last Mile line when there are no findings', () => {
+test('renderMarkdown no longer emits a Next Steps block', () => {
   const report = {
     engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
     generatedAt: '2026-11-13T00:00:00.000Z',
@@ -79,8 +82,8 @@ test('renderMarkdown keeps a plain Last Mile line when there are no findings', (
   };
 
   const markdown = renderMarkdown(/** @type {any} */ (report));
-  assert.ok(markdown.includes('- Get It Fixed by Last Mile'));
-  assert.ok(!markdown.includes('/fix?findings='));
+  assert.ok(!markdown.includes('## Next Steps'), markdown);
+  assert.ok(!markdown.includes('Get It Fixed by Last Mile'), markdown);
 });
 
 test('renderMarkdown explains each finding with its message and fix', () => {
@@ -197,6 +200,31 @@ test('renderMarkdown reports advisory findings separately and unscored', () => {
   assert.ok(markdown.indexOf('## Advisories (not scored)') > markdown.indexOf('## Findings (your code)'), markdown);
 });
 
+test('renderMarkdown groups same-rule advisories under one message with the files listed', () => {
+  const report = {
+    engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
+    generatedAt: '2026-11-13T00:00:00.000Z',
+    riskScore: { total: 0, max: 350, tier: 'green', riskPercentage: 0 },
+    pillars: [],
+    findings: [
+      { kind: 'hygiene', teardownId: null, file: 'a.php', line: 1, severity: 'low', pillar: 'security', title: 'Use of exec() function.', source: { provider: 'semgrep', ruleId: 'vendored.exec-use' }, advisory: true },
+      { kind: 'hygiene', teardownId: null, file: 'b.php', line: 2, severity: 'low', pillar: 'security', title: 'Use of exec() function.', source: { provider: 'semgrep', ruleId: 'vendored.exec-use' }, advisory: true },
+      { kind: 'hygiene', teardownId: null, file: 'c.php', line: 3, severity: 'low', pillar: 'security', title: 'Use of exec() function.', source: { provider: 'semgrep', ruleId: 'vendored.exec-use' }, advisory: true },
+    ],
+    dependencies: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+    skippedProviders: [],
+    notStaticallyVerifiable: [],
+  };
+
+  const markdown = renderMarkdown(/** @type {any} */ (report));
+  // One grouped bullet, not three: header with title + count, then compact file
+  // locations.
+  assert.ok(markdown.includes('- 💡 **vendored.exec-use** — Use of exec() function. (3)'), markdown);
+  assert.ok(markdown.includes('`a.php:1`'), markdown);
+  assert.ok(markdown.includes('`b.php:2`'), markdown);
+  assert.ok(markdown.includes('`c.php:3`'), markdown);
+});
+
 test('renderMarkdown renders a brief App Stack summary from detected markers', () => {
   const report = {
     engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
@@ -231,4 +259,24 @@ test('renderMarkdown omits the App Stack section when no markers were detected',
 
   const markdown = renderMarkdown(/** @type {any} */ (report));
   assert.ok(!markdown.includes('## App Stack'), markdown);
+});
+
+test('renderMarkdown reports Pimcore as Twig, not React (admin UI is not the frontend)', () => {
+  const report = {
+    engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
+    generatedAt: '2026-11-13T00:00:00.000Z',
+    riskScore: { total: 0, max: 350, tier: 'green', riskPercentage: 0 },
+    pillars: [],
+    findings: [],
+    dependencies: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+    skippedProviders: [],
+    notStaticallyVerifiable: [],
+    stack: { pimcore: true, symfony: true, doctrine: true, react: true },
+  };
+
+  const markdown = renderMarkdown(/** @type {any} */ (report));
+  assert.ok(markdown.includes('Pimcore (Symfony)'), markdown);
+  assert.ok(markdown.includes('Twig templates'), markdown);
+  assert.ok(markdown.includes('Doctrine ORM'), markdown);
+  assert.ok(!markdown.includes('React frontend'), markdown);
 });

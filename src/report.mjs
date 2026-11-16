@@ -22,6 +22,22 @@ const TIER_LABEL = /** @type {Record<Tier, string>} */ ({
   red: 'High Risk',
 });
 
+/** Emoji per pillar (for the section headings). */
+const PILLAR_EMOJI = /** @type {Record<string, string>} */ ({
+  security: '🔒',
+  runtime: '⚙️',
+  architecture: '🏗️',
+  qa: '🧪',
+});
+
+/** Emoji per severity (scored findings) — the at-a-glance severity cue. */
+const SEVERITY_BADGE = /** @type {Record<string, string>} */ ({
+  critical: '🔴',
+  high: '🟠',
+  medium: '🟡',
+  low: '🔵',
+});
+
 /**
  * Deep-link to a teardown's editorial page on peek.software.
  * @param {string} teardownId — e.g. "TD-008".
@@ -114,13 +130,14 @@ export function renderMarkdown(report) {
   } else {
     /** @type {string | null} */
     let currentPillar = null;
-    for (const finding of codeFindings) {
-      if (finding.pillar !== currentPillar) {
-        currentPillar = finding.pillar;
+    for (const group of groupFindings(codeFindings)) {
+      if (group.pillar !== currentPillar) {
+        currentPillar = group.pillar;
         lines.push('');
-        lines.push(`### ${finding.pillar}`);
+        lines.push(pillarHeading(group.pillar));
       }
-      lines.push(formatFinding(finding));
+      lines.push(formatFindingGroup(group.key, group.findings));
+      lines.push('');
     }
   }
 
@@ -130,13 +147,14 @@ export function renderMarkdown(report) {
     lines.push('_Test code is not shipped to production, so these do not affect the risk score — but a real secret committed to a test file is still public in git and worth fixing._');
     /** @type {string | null} */
     let currentPillar = null;
-    for (const finding of testFindings) {
-      if (finding.pillar !== currentPillar) {
-        currentPillar = finding.pillar;
+    for (const group of groupFindings(testFindings)) {
+      if (group.pillar !== currentPillar) {
+        currentPillar = group.pillar;
         lines.push('');
-        lines.push(`### ${finding.pillar}`);
+        lines.push(pillarHeading(group.pillar));
       }
-      lines.push(formatFinding(finding));
+      lines.push(formatFindingGroup(group.key, group.findings));
+      lines.push('');
     }
   }
 
@@ -146,13 +164,14 @@ export function renderMarkdown(report) {
     lines.push('_Informational — these do not affect the risk score. They are noted for awareness, not as defects._');
     /** @type {string | null} */
     let currentPillar = null;
-    for (const finding of advisories) {
-      if (finding.pillar !== currentPillar) {
-        currentPillar = finding.pillar;
+    for (const group of groupFindings(advisories)) {
+      if (group.pillar !== currentPillar) {
+        currentPillar = group.pillar;
         lines.push('');
-        lines.push(`### ${finding.pillar}`);
+        lines.push(pillarHeading(group.pillar));
       }
-      lines.push(formatFinding(finding));
+      lines.push(formatFindingGroup(group.key, group.findings));
+      lines.push('');
     }
   }
 
@@ -172,21 +191,6 @@ export function renderMarkdown(report) {
     }
   }
 
-  lines.push('');
-  lines.push('## Next Steps');
-  const teardownIds = [
-    ...new Set(
-      [...codeFindings, ...testFindings]
-        .map((finding) => finding.teardownId)
-        .filter((id) => typeof id === 'string')
-        .map((id) => /** @type {string} */ (id)),
-    ),
-  ];
-  if (teardownIds.length > 0) {
-    lines.push(`- Get It Fixed by Last Mile → ${fixPath(teardownIds)}`);
-  } else {
-    lines.push('- Get It Fixed by Last Mile');
-  }
   lines.push('');
   return lines.join('\n');
 }
@@ -213,18 +217,30 @@ function renderStack(stack) {
   if (stack.prisma) parts.push('Prisma ORM');
   if (stack.express) parts.push('Express');
 
-  // PHP backends (composer.json markers).
-  if (stack.pimcore) parts.push('Pimcore (Symfony)');
-  else if (stack.laravel) parts.push('Laravel');
-  else if (stack.symfony) parts.push('Symfony');
+  // PHP backends (composer.json markers). Pimcore is Symfony-based and always
+  // renders via Twig — its package.json `react` dep is the admin UI build
+  // tooling, not the app's own frontend, so it must not claim a React frontend.
+  if (stack.pimcore) {
+    parts.push('Pimcore (Symfony)');
+    parts.push('Twig templates');
+  } else if (stack.laravel) {
+    parts.push('Laravel');
+    if (stack.twig) parts.push('Twig templates');
+  } else if (stack.symfony) {
+    parts.push('Symfony');
+    if (stack.twig) parts.push('Twig templates');
+  }
   if (stack.doctrine) parts.push('Doctrine ORM');
-  if (stack.twig) parts.push('Twig templates');
 
+  // A JS "frontend" is only meaningful for JS-first apps; inside a Pimcore app
+  // the JS deps are admin tooling, so we skip the label there.
   const frontendBits = [];
-  if (stack.next) frontendBits.push('Next.js');
-  else if (stack.react) frontendBits.push('React');
-  if (stack.vue) frontendBits.push('Vue');
-  if (stack.vite) frontendBits.push('Vite');
+  if (!stack.pimcore) {
+    if (stack.next) frontendBits.push('Next.js');
+    else if (stack.react) frontendBits.push('React');
+    if (stack.vue) frontendBits.push('Vue');
+    if (stack.vite) frontendBits.push('Vite');
+  }
   if (frontendBits.length > 0) parts.push(`${frontendBits.join(' + ')} frontend`);
 
   if (stack.stripe) parts.push('Stripe payments');
@@ -444,6 +460,18 @@ function renderCalibration(calibration) {
 }
 
 /**
+ * A pillar section heading with its human label + a fixed emoji, so the report
+ * reads as a guided tour rather than a flat list of lowercase keys.
+ * @param {import('./types.mjs').Pillar} pillar
+ * @returns {string}
+ */
+function pillarHeading(pillar) {
+  const emoji = PILLAR_EMOJI[pillar] ?? '';
+  const label = PILLAR_LABELS[pillar] ?? pillar;
+  return `### ${emoji} ${label}`;
+}
+
+/**
  * Format a single finding as a Markdown bullet.
  * @param {Finding} finding
  * @returns {string}
@@ -458,21 +486,73 @@ function formatFinding(finding) {
     return `- **${head}** \`${finding.dependency.package}@${finding.dependency.version ?? '?'}\` (\`${location}\`): ${finding.title}${fix}`;
   }
 
+  // Scored findings carry a severity badge; advisories a neutral lightbulb —
+  // so "errors" and "informational" never look the same at a glance.
+  const marker = finding.advisory ? '💡' : SEVERITY_BADGE[finding.severity] ?? 'ℹ️';
   const head = finding.teardownId ?? finding.source.ruleId ?? finding.id;
-  const parts = [`- **${head}** (\`${location}\`): ${finding.title}`];
-  // Explain the finding, then how to fix it — the "one glance → oh, that's
-  // why" moment the report is aiming for.
+  const parts = [`- ${marker} **${head}** · \`${location}\` — ${finding.title}`];
   if (finding.message && finding.message !== finding.title) {
     parts.push(`  - ${finding.message}`);
   }
   if (finding.fixSummary) {
-    parts.push(`  - Fix: ${finding.fixSummary}`);
+    parts.push(`  - 🔧 Fix: ${finding.fixSummary}`);
   }
   if (finding.corroboratedBy && finding.corroboratedBy.length > 0) {
-    parts.push(`  - Confirmed by ${finding.corroboratedBy.join(' + ')} (cross-tool agreement).`);
+    parts.push(`  - 🤝 Confirmed by ${finding.corroboratedBy.join(' + ')} (cross-tool agreement).`);
   }
   if (finding.teardownId) {
-    parts.push(`  → see ${teardownPath(finding.teardownId)}`);
+    parts.push(`  → ${teardownPath(finding.teardownId)}`);
   }
   return parts.join('\n');
+}
+
+/**
+ * Group findings by (pillar, key) — teardown id, else rule id, else id —
+ * preserving first-seen order, so one issue renders once with its sites listed.
+ * @param {Finding[]} findings
+ * @returns {Array<{ pillar: import('./types.mjs').Pillar; key: string; findings: Finding[] }>}
+ */
+function groupFindings(findings) {
+  /** @type {Map<string, { pillar: import('./types.mjs').Pillar; key: string; findings: Finding[] }>} */
+  const groups = new Map();
+  for (const finding of findings) {
+    const pillar = finding.pillar;
+    const key = finding.teardownId ?? finding.source?.ruleId ?? finding.id;
+    // Group only when the explanation is identical too — findings sharing an id
+    // but with different messages (e.g. checkov per-resource detail) stay as
+    // their own entries rather than collapsing the detail away.
+    const mapKey = `${pillar}\u0000${key}\u0000${finding.title}\u0000${finding.message ?? ''}`;
+    const group = groups.get(mapKey);
+    if (group) group.findings.push(finding);
+    else groups.set(mapKey, { pillar, key, findings: [finding] });
+  }
+  return [...groups.values()];
+}
+
+/**
+ * Format a group of findings sharing one key. A single-site finding stays an
+ * inline bullet; a multi-site one becomes a header with the shared explanation
+ * once, then a compact list of the files it touched.
+ * @param {string} key
+ * @param {Finding[]} findings
+ * @returns {string}
+ */
+function formatFindingGroup(key, findings) {
+  const first = findings[0];
+  if (findings.length === 1) return formatFinding(first);
+
+  const marker = first.advisory ? '💡' : SEVERITY_BADGE[first.severity] ?? 'ℹ️';
+  /** @type {(finding: Finding) => string} */
+  const location = (finding) =>
+    finding.line != null ? `${finding.file}:${finding.line}` : finding.file;
+
+  const lines = [`- ${marker} **${key}** — ${first.title} (${findings.length})`];
+  if (first.message && first.message !== first.title) lines.push(`  - ${first.message}`);
+  if (first.fixSummary) lines.push(`  - 🔧 Fix: ${first.fixSummary}`);
+  if (first.corroboratedBy?.length) {
+    lines.push(`  - 🤝 Confirmed by ${first.corroboratedBy.join(' + ')} (cross-tool agreement).`);
+  }
+  if (first.teardownId) lines.push(`  → ${teardownPath(first.teardownId)}`);
+  for (const finding of findings) lines.push(`  - \`${location(finding)}\``);
+  return lines.join('\n');
 }
