@@ -111,6 +111,7 @@
  * @typedef {Object} RunContext
  * @property {string} repoRoot — absolute repo root.
  * @property {string[]} targets — resolved target paths (absolute).
+ * @property {Record<string, boolean> | undefined} stack — detected framework/service markers.
  * @property {(line: string) => void} log — progress sink.
  */
 
