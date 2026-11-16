@@ -13,8 +13,9 @@
  *   - `kind: 'hygiene'` (no Peek teardown — `source.ruleId` = checkov check id).
  *   - `pillar`: `security` by default; `runtime` for Dockerfile/container checks.
  *   - `severity`: checkov's severity when present (checkov 3.x leaves it null in
- *     JSON), else a curated map — IAM `*` wildcard checks (`CKV_AWS_109/110/111`)
- *     → high, everything else → medium.
+ *     JSON), else a curated map + name heuristic — IAM privilege checks
+ *     (`CKV_AWS_62/63/355`, `CKV2_AWS_40`, `CKV_AWS_286-290`, and the older
+ *     `CKV_AWS_109/110/111`) → high, everything else → medium.
  *   - **scored** = CRITICAL/HIGH (the real misconfigs, incl. IAM wildcards);
  *     **advisory** = MEDIUM/LOW (best-practice noise — same precision-over-volume
  *     discipline as every other provider).
@@ -57,11 +58,26 @@ const CHECKOV_SEVERITY = /** @type {Record<string, Severity>} */ ({
 });
 
 /**
- * Checkov check ids for the IAM `*` wildcard smells. Checkov 3.x JSON omits
- * per-check severity (it is `null`), so these are the checks we still rank
- * high and score — everything else falls back to `medium` (advisory).
+ * Checkov 3.x JSON omits per-check severity (it is `null`), so findings are
+ * ranked by a curated list + name heuristic instead. IAM privilege checks — the
+ * `*` wildcard smells and privilege paths — are ranked high and scored; all
+ * other checks fall back to medium (advisory). Both current and older checkov
+ * ids are kept (checkov has renamed these checks across releases).
  */
-const IAM_WILDCARD_CHECKS = new Set(['CKV_AWS_109', 'CKV_AWS_110', 'CKV_AWS_111']);
+const IAM_PRIVILEGE_CHECK_IDS = new Set([
+  'CKV_AWS_62', // full "*-*" administrative privileges
+  'CKV_AWS_63', // Action: "*"
+  'CKV_AWS_355', // Resource: "*" for restrictable actions
+  'CKV2_AWS_40', // full IAM privileges
+  'CKV_AWS_286', // privilege escalation
+  'CKV_AWS_287', // credentials exposure
+  'CKV_AWS_288', // data exfiltration
+  'CKV_AWS_289', // permissions management / resource exposure
+  'CKV_AWS_290', // write access without constraints
+  'CKV_AWS_109', 'CKV_AWS_110', 'CKV_AWS_111', // older ids for the same smells
+]);
+const IAM_PRIVILEGE_NAME_RE =
+  /IAM.*(wildcard|privilege|administrative|exfiltration|escalation|permissions management|write access|credentials exposure)/i;
 
 /** @type {Provider} */
 export const checkovProvider = {
@@ -151,13 +167,13 @@ export function parseCheckovJson(stdout, repoRoot) {
  */
 function toFinding(result, repoRoot) {
   const checkId = String(result.check_id ?? result.bc_check_id ?? 'checkov');
+  const checkName = String(result.check_name ?? checkId);
   // checkov 3.x leaves `severity` null in JSON — use it when present, else fall
-  // back to the curated IAM-wildcard map (high) and default everything else to
+  // back to the curated IAM-privilege map (high) and default everything else to
   // medium (advisory). We rank conservatively because we can't see the severity.
-  const severity = /** @type {Severity} */ (
-    CHECKOV_SEVERITY[String(result.severity ?? '').toUpperCase()] ??
-    (IAM_WILDCARD_CHECKS.has(checkId) ? 'high' : 'medium')
-  );
+  const rawSeverity = String(result.severity ?? '').toUpperCase();
+  const isIamPrivilege = IAM_PRIVILEGE_CHECK_IDS.has(checkId) || IAM_PRIVILEGE_NAME_RE.test(checkName);
+  const severity = /** @type {Severity} */ (CHECKOV_SEVERITY[rawSeverity] ?? (isIamPrivilege ? 'high' : 'medium'));
   const absolutePath = String(result.file_abs_path ?? result.file_path ?? '');
   const file = absolutePath.startsWith(repoRoot)
     ? absolutePath.slice(repoRoot.length).replace(/^[/\\]+/, '')
@@ -166,7 +182,7 @@ function toFinding(result, repoRoot) {
   const range = Array.isArray(result.file_line_range) ? result.file_line_range : [];
   const line = typeof range[0] === 'number' ? /** @type {number} */ (range[0]) : null;
 
-  const title = String(result.check_name ?? checkId);
+  const title = checkName;
   const resource = result.resource ? ` — resource: ${String(result.resource)}` : '';
   const fixSummary = result.guideline ? String(result.guideline) : null;
 

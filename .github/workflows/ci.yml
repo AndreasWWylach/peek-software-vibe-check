@@ -57,6 +57,10 @@ jobs:
       - name: Install eslint
         run: npm install -g eslint@9
 
+      # checkov runs the IaC provider (misconfiguration + IAM wildcards).
+      - name: Install checkov
+        run: pipx install checkov
+
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
