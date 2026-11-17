@@ -128,51 +128,21 @@ export function renderMarkdown(report) {
   if (codeFindings.length === 0) {
     lines.push('_No findings._');
   } else {
-    /** @type {string | null} */
-    let currentPillar = null;
-    for (const group of groupFindings(codeFindings)) {
-      if (group.pillar !== currentPillar) {
-        currentPillar = group.pillar;
-        lines.push('');
-        lines.push(pillarHeading(group.pillar));
-      }
-      lines.push(formatFindingGroup(group.key, group.findings));
-      lines.push('');
-    }
+    renderFindingBlocks(lines, codeFindings);
   }
 
   if (testFindings.length > 0) {
     lines.push('');
     lines.push('## Findings in test files (not scored)');
     lines.push('_Test code is not shipped to production, so these do not affect the risk score — but a real secret committed to a test file is still public in git and worth fixing._');
-    /** @type {string | null} */
-    let currentPillar = null;
-    for (const group of groupFindings(testFindings)) {
-      if (group.pillar !== currentPillar) {
-        currentPillar = group.pillar;
-        lines.push('');
-        lines.push(pillarHeading(group.pillar));
-      }
-      lines.push(formatFindingGroup(group.key, group.findings));
-      lines.push('');
-    }
+    renderFindingBlocks(lines, testFindings);
   }
 
   if (advisories.length > 0) {
     lines.push('');
     lines.push('## Advisories (not scored)');
     lines.push('_Informational — these do not affect the risk score. They are noted for awareness, not as defects._');
-    /** @type {string | null} */
-    let currentPillar = null;
-    for (const group of groupFindings(advisories)) {
-      if (group.pillar !== currentPillar) {
-        currentPillar = group.pillar;
-        lines.push('');
-        lines.push(pillarHeading(group.pillar));
-      }
-      lines.push(formatFindingGroup(group.key, group.findings));
-      lines.push('');
-    }
+    renderFindingBlocks(lines, advisories);
   }
 
   if (skippedProviders.length > 0) {
@@ -325,22 +295,9 @@ function topCodeIssue(codeFindings) {
  * @returns {string[]}
  */
 function renderSummary(codeFindings, dependencies, testFindings, advisories) {
-  /** @type {Map<string, Finding[]>} */
-  const byProvider = new Map();
-  for (const finding of codeFindings) {
-    const provider = finding.source?.provider ?? 'unknown';
-    const list = byProvider.get(provider);
-    if (list) list.push(finding);
-    else byProvider.set(provider, [finding]);
-  }
-  /** @type {Map<string, Finding[]>} */
-  const advisoriesByProvider = new Map();
-  for (const finding of advisories) {
-    const provider = finding.source?.provider ?? 'unknown';
-    const list = advisoriesByProvider.get(provider);
-    if (list) list.push(finding);
-    else advisoriesByProvider.set(provider, [finding]);
-  }
+  const byProvider = bucketByProvider(codeFindings);
+  const advisoriesByProvider = bucketByProvider(advisories);
+  const testsByProvider = bucketByProvider(testFindings);
   const order = ['semgrep', 'gitleaks', 'trivy', 'firebase', 'madge', 'deps', 'headers', 'ci', 'checkov', 'hadolint', 'bandit', 'gosec', 'phpstan', 'scc', 'eslint', 'tests', 'osv'];
   /** @type {string[]} */
   const lines = [];
@@ -355,24 +312,43 @@ function renderSummary(codeFindings, dependencies, testFindings, advisories) {
     }
     const scored = byProvider.get(provider) ?? [];
     const advisory = advisoriesByProvider.get(provider) ?? [];
-    if (scored.length === 0 && advisory.length === 0) {
+    const tests = testsByProvider.get(provider) ?? [];
+    if (scored.length === 0 && advisory.length === 0 && tests.length === 0) {
       lines.push(`| ${provider} | 0 | — |`);
       continue;
     }
     const counts = scored.length > 0 ? `${scored.length}` : '0';
-    const findingsCell = advisory.length > 0 ? `${counts} · ${advisory.length} advisory` : counts;
+    const qualifiers = [];
+    if (advisory.length > 0) qualifiers.push(`${advisory.length} advisory`);
+    if (tests.length > 0) qualifiers.push(`${tests.length} in tests`);
+    const findingsCell = qualifiers.length > 0 ? `${counts} · ${qualifiers.join(' · ')}` : counts;
     const what = [
       scored.length > 0 ? summarizeGroup(scored) : null,
       advisory.length > 0 ? `advisory: ${summarizeGroup(advisory)}` : null,
+      tests.length > 0 ? `test files: ${summarizeGroup(tests)}` : null,
     ]
       .filter((part) => part !== null)
       .join(' · ');
     lines.push(`| ${provider} | ${findingsCell} | ${what} |`);
   }
-  if (testFindings.length > 0) {
-    lines.push(`| test files (not scored) | ${testFindings.length} | ${summarizeGroup(testFindings)} |`);
-  }
   return lines;
+}
+
+/**
+ * Bucket findings by their source provider id.
+ * @param {Finding[]} findings
+ * @returns {Map<string, Finding[]>}
+ */
+function bucketByProvider(findings) {
+  /** @type {Map<string, Finding[]>} */
+  const byProvider = new Map();
+  for (const finding of findings) {
+    const provider = finding.source?.provider ?? 'unknown';
+    const list = byProvider.get(provider);
+    if (list) list.push(finding);
+    else byProvider.set(provider, [finding]);
+  }
+  return byProvider;
 }
 
 /**
@@ -504,6 +480,27 @@ function formatFinding(finding) {
     parts.push(`  → ${teardownPath(finding.teardownId)}`);
   }
   return parts.join('\n');
+}
+
+/**
+ * Render grouped findings as pillar blocks: `### <emoji> <label>` headings,
+ * then the grouped entries. Findings / test-files / advisories all share this
+ * layout, so it lives here once.
+ * @param {string[]} lines — output sink.
+ * @param {Finding[]} findings
+ */
+function renderFindingBlocks(lines, findings) {
+  /** @type {string | null} */
+  let currentPillar = null;
+  for (const group of groupFindings(findings)) {
+    if (group.pillar !== currentPillar) {
+      currentPillar = group.pillar;
+      lines.push('');
+      lines.push(pillarHeading(group.pillar));
+    }
+    lines.push(formatFindingGroup(group.key, group.findings));
+    lines.push('');
+  }
 }
 
 /**

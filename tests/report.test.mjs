@@ -153,8 +153,8 @@ test('renderMarkdown reports test-file findings separately and unscored', () => 
   const markdown = renderMarkdown(/** @type {any} */ (report));
   assert.ok(markdown.includes('## Findings in test files (not scored)'), markdown);
   assert.ok(markdown.includes('keys.test.ts'), markdown);
-  // The summary table must attribute the test-file count explicitly.
-  assert.ok(markdown.includes('| test files (not scored) | 1 | TD-016 ×1 |'), markdown);
+  // The summary table must attribute the test-file count to its provider.
+  assert.ok(markdown.includes('| gitleaks | 1 · 1 in tests | TD-016 ×1 · test files: TD-016 ×1 |'), markdown);
 });
 
 test('renderMarkdown reports advisory findings separately and unscored', () => {
