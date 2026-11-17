@@ -647,7 +647,7 @@ it **never executes them** (running tests would break the offline principle):
 - ✅ **Phase 1 — engine skeleton.** CLI, config loader, provider registry (Semgrep + OSV-Scanner + Madge + scc + Gitleaks + ESLint + tests), finding dedup, pillar mapping, Markdown renderer, offline/deterministic guarantees.
 - ✅ **Phase 2 — golden rulepack.** TD-002/008/016/032/033/042/045/046/050/051 across JS/TS/Python/PHP + the golden harness; `catalog/teardowns.json` vendored.
 - 🚧 **Phase 3 — config generator (peek.software).** Backend `deriveTargets` + `targets` param landed (uncommitted); the full quiz→config→scan flow still needs end-to-end testing and likely extension.
-- 🚧 **Phase 4 — calibration overlay.** Engine-side `computeCalibration` + the report overlay are in; still needs wiring with a real generated config.
+- ✅ **Phase 4 — calibration overlay.** Engine-side `computeCalibration` + the report overlay render end-to-end (config `quiz` block → self-report vs. scan table + per-hotspot ⚠️/✅ moments). The peek.software backend passes the quiz block through verbatim (`generateScanConfig`), and its `totalScore`/`pillarBreakdown`/`hotspots` shape matches the engine's expectation — verified against the sample config.
 - ⬜ **Phase 5 — parameterized rules + full detectable catalog.**
 
 ---

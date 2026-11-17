@@ -69,20 +69,31 @@ test(
     assert.ok(teardowns.includes('TD-045'), 'expected TD-045 to fire');
 
     // Calibration overlay: the config carries quiz data, and Q1.1 maps to
-    // TD-016, which the scan found.
+    // TD-016, which the scan found; Q1.3 (TD-008) and Q2.2 (TD-002) are not
+    // enabled, so they render as not-found.
     const calibration = report.calibration;
     assert.ok(calibration, 'expected calibration when quiz data is present');
     if (!calibration) throw new Error('missing calibration');
     assert.equal(calibration.selfReport, 142);
     const moment = calibration.moments.find((m) => m.questionId === 'Q1.1');
-    assert.equal(moment?.teardownId, 'TD-016');
-    assert.equal(moment?.found, true);
+    assert.deepEqual(moment?.teardownIds, ['TD-016']);
+    assert.deepEqual(moment?.found, ['TD-016']);
+    const q13 = calibration.moments.find((m) => m.questionId === 'Q1.3');
+    assert.deepEqual(q13?.teardownIds, ['TD-008']);
+    assert.deepEqual(q13?.found, []);
 
     // Both artifacts were written, and the JSON self-check already passed.
     const json = JSON.parse(await readFile(join(outDir, 'peek-report.json'), 'utf8'));
     assert.equal(json.riskScore.total, report.riskScore.total);
     const markdown = await readFile(join(outDir, 'AUDIT-REPORT.md'), 'utf8');
     assert.ok(markdown.includes('TD-016'), 'expected the Markdown report to mention TD-016');
+    // The calibration overlay renders: the self-report vs. scan table + the
+    // per-hotspot moments (⚠️ = self-report contradicted, ✅ = not found).
+    assert.ok(markdown.includes('## Self-Report vs. Scan'), 'expected the self-report vs. scan section');
+    assert.ok(markdown.includes('## Calibration'), 'expected the calibration moments section');
+    assert.ok(markdown.includes('| Security & Secret Hygiene |'), 'expected the pillar table row');
+    assert.ok(markdown.includes('⚠️ Q1.1'), 'expected the found hotspot to be flagged');
+    assert.ok(markdown.includes('✅ Q1.3'), 'expected the not-found hotspot to pass');
   },
 );
 

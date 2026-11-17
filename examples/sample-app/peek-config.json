@@ -6,7 +6,7 @@
   "enabledRules": ["TD-016", "TD-045"],
   "quiz": {
     "totalScore": 142,
-    "hotspots": ["Q1.1", "Q2.2"],
-    "pillarBreakdown": { "security": 34 }
+    "hotspots": ["Q1.1", "Q1.3", "Q2.2"],
+    "pillarBreakdown": { "security": 34, "runtime": 51, "architecture": 30, "qa": 27 }
   }
 }
