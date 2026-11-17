@@ -1,0 +1,6 @@
+# Golden fixture: placeholder secrets in a CI workflow. Gitleaks flags these
+# (stripe-access-token / generic-api-key), but they are intentionally inert —
+# the workflow comment above them says they are never read.
+env:
+  STRIPE_SECRET_KEY: sk_test_placeholder
+  STRIPE_WEBHOOK_SECRET: whsec_placeholder

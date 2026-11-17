@@ -16,6 +16,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
 import { hasNonCodeExt, isEnvFile, isIgnoredDir, isVendoredPath } from '../ignore.mjs';
+import { readLine, shouldSkipSecret } from '../secretClassify.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').RunContext} RunContext */
@@ -37,16 +38,14 @@ const TEARDOWN_ID = 'TD-016';
  */
 function isFirebaseWebConfig(file) {
   try {
-    const text = readFileSync(file, 'utf8');
-    const has = (/** @type {string} */ needle) => text.includes(needle);
+    const lower = readFileSync(file, 'utf8').toLowerCase();
+    const has = (/** @type {string} */ needle) => lower.includes(needle.toLowerCase());
     // `authDomain` + `projectId` + an apiKey, inside a Firebase init/config
     // object, is the browser-SDK shape — never a server-side credential.
-    return (
-      has('authDomain') &&
-      has('projectId') &&
-      has('apiKey') &&
-      (has('firebaseConfig') || has('initializeApp'))
-    );
+    // Case-insensitive so `DEFAULT_FIREBASE_CONFIG` / `FirebaseWebConfig` /
+    // `firebaseConfig` spellings all match. The first three terms are already
+    // Firebase-specific, so the 4th check needs only the `firebase` prefix.
+    return has('authDomain') && has('projectId') && has('apiKey') && has('firebase');
   } catch {
     return false;
   }
@@ -166,11 +165,19 @@ export const gitleaksProvider = {
           publicSkipped += 1;
           continue;
         }
+        // Value-level public-by-design: the Firebase Auth REST `key` (the public
+        // web apiKey) and reCAPTCHA/App Check site keys. Inspects the flagged
+        // line for a boolean decision only — never copies the value out.
+        const flaggedLine = readLine(abs, leak.line);
+        if (shouldSkipSecret(flaggedLine, abs)) {
+          publicSkipped += 1;
+          continue;
+        }
         findings.push(toFinding(leak, ctx.repoRoot, fact));
       }
     }
     if (publicSkipped > 0) {
-      ctx.log(`  gitleaks: skipped ${publicSkipped} public-by-design key(s) in Firebase web configs`);
+      ctx.log(`  gitleaks: skipped ${publicSkipped} public-by-design key(s) (Firebase web config / App Check site key / Firebase Auth REST key)`);
     }
     if (skipped > 0) {
       ctx.log(`  gitleaks: skipped ${skipped} leak(s) in ignored dirs / .env files`);

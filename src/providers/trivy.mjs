@@ -24,6 +24,7 @@ import { existsSync, readdirSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 import { IGNORED_DIRS, isIgnoredDir } from '../ignore.mjs';
+import { readLine, shouldSkipSecret } from '../secretClassify.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').RunContext} RunContext */
@@ -114,6 +115,11 @@ export function parseTrivyJson(stdout, repoRoot) {
       findings.push(vulnFinding(vuln, file, ecosystem));
     }
     for (const secret of /** @type {Array<Record<string, any>>} */ (result.Secrets ?? [])) {
+      // Skip public-by-design / inert values (placeholders, alphabet constants,
+      // Firebase Auth REST keys) — same classification as gitleaks.
+      const line = typeof secret.StartLine === 'number' ? /** @type {number} */ (secret.StartLine) : null;
+      const abs = isAbsolute(file) ? file : join(repoRoot, file);
+      if (line != null && shouldSkipSecret(readLine(abs, line), abs)) continue;
       findings.push(secretFinding(secret, file));
     }
   }

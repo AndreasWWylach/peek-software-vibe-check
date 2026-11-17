@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { parseSemgrepJson } from '../src/providers/semgrep.mjs';
 import { collectRootLockfiles, parseOsvJson } from '../src/providers/osv.mjs';
 import { isSecretConfigFile } from '../src/providers/gitleaks.mjs';
+import { isInertSecret, isPublicByDesignValue } from '../src/secretClassify.mjs';
 import { parseMadgeJson } from '../src/providers/madge.mjs';
 import { parseSccJson } from '../src/providers/scc.mjs';
 import { parseGitleaksJson } from '../src/providers/gitleaks.mjs';
@@ -253,6 +254,53 @@ test('gitleaks: maps leaks to finding fields and drops the secret value', () => 
 
 test('gitleaks: tolerates empty output', () => {
   assert.deepEqual(parseGitleaksJson('[]'), []);
+});
+
+test('gitleaks: isPublicByDesignValue skips Firebase Auth REST keys and App Check site keys', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vibe-check-gitleaks-'));
+  try {
+    // A driver of the Firebase Auth REST API carries the public web apiKey.
+    const pilot = join(dir, 'pilot.mjs');
+    writeFileSync(pilot, "fetch('https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=' + K);");
+    const aiKeyLine = "const K = 'AIzaSyQFwAfGoCsheReohWSvhShgW7mOhIlMQGa';";
+    assert.equal(isPublicByDesignValue(aiKeyLine, pilot), true, 'AIzaSy key in a Firebase Auth REST driver is public by design');
+
+    // The same AIzaSy value WITHOUT Identity Toolkit usage is a real leak.
+    const server = join(dir, 'server.ts');
+    writeFileSync(server, '');
+    assert.equal(isPublicByDesignValue(aiKeyLine, server), false, 'AIzaSy key without Identity Toolkit usage stays flagged');
+
+    // App Check / reCAPTCHA site key, labelled as such in source.
+    const config = join(dir, 'config.ts');
+    writeFileSync(config, '');
+    const siteKeyLine = "export const DEFAULT_APP_CHECK_SITE_KEY = '6LcABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789a';";
+    assert.equal(isPublicByDesignValue(siteKeyLine, config), true, 'labelled App Check site key is public by design');
+
+    // The same 6L… value NOT labelled as a site key stays flagged (secret key).
+    assert.equal(isPublicByDesignValue("export const recaptcha = '6LcABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789a';", config), false, 'unlabelled 6L… value stays flagged');
+
+    // An ordinary API key is never public by design.
+    assert.equal(isPublicByDesignValue("export const apiKey = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';", config), false, 'ordinary API key is not public by design');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('gitleaks: isInertSecret skips placeholders and alphabet constants', () => {
+  // Placeholder secret values (the underscore before `placeholder` must not
+  // defeat the match).
+  assert.equal(isInertSecret('STRIPE_SECRET_KEY=sk_test_placeholder'), true);
+  assert.equal(isInertSecret('STRIPE_WEBHOOK_SECRET=whsec_placeholder2'), true);
+  assert.equal(isInertSecret('EMAIL_API_KEY=placeholder'), true);
+  assert.equal(isInertSecret('const key = "changeme";'), true);
+
+  // Alphabet / character-set constants.
+  assert.equal(isInertSecret("const TOKEN_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';"), true);
+  assert.equal(isInertSecret("const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';"), true);
+
+  // Real secrets are NOT inert.
+  assert.equal(isInertSecret("const apiKey = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';"), false, 'ordinary API key is not inert');
+  assert.equal(isInertSecret("const stripe = 'sk_test_51Hq7abcdefghijklmnop';"), false, 'real Stripe test key is not inert');
 });
 
 test('eslint: maps messages to hygiene findings (error→medium, warn→low)', () => {

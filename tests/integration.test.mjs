@@ -133,6 +133,20 @@ test(
     assert.equal(secrets[0]?.file, 'src/keys.ts');
     assert.equal(secrets[0]?.pillar, 'security');
     assert.equal(secrets[0]?.severity, 'critical');
+    // Public-by-design values must be SKIPPED, not reported: the Firebase web
+    // config (apiKey + App Check site key), the Firebase Auth REST key in a
+    // pilot script, and a character-set alphabet constant. Only the genuine
+    // src/keys.ts secret remains.
+    const reportedFiles = new Set(secrets.map((finding) => finding.file));
+    assert.ok(!reportedFiles.has('src/firebase-web-config.ts'), 'Firebase web config keys must be skipped');
+    assert.ok(!reportedFiles.has('scripts/pilot-exercise.mjs'), 'Firebase Auth REST key must be skipped');
+    assert.ok(!reportedFiles.has('src/ticketing.ts'), 'alphabet constant must be skipped');
+
+    // The CI placeholder secret is skipped entirely — not even an advisory.
+    assert.ok(
+      !report.findings.some((finding) => finding.file === 'scripts/ci.yml'),
+      'placeholder secret must be skipped entirely',
+    );
     // Trust principle: the report is written to disk and shared — the secret
     // value must never appear in it.
     const serialized = JSON.stringify(report);
