@@ -49,11 +49,17 @@ export function computeCalibration({ quiz, scanTotal, scanPillars, findings, tea
     scan: scanByPillar.get(pillar) ?? 0,
   }));
 
-  // Reverse index: quiz question id → teardown id (from the catalog back-links).
-  /** @type {Map<string, string>} */
-  const questionToTd = new Map();
+  // Reverse index: quiz question id → teardown ids. One question may map to
+  // several teardowns (e.g. Q3.1 covers both TD-019 monolithic + TD-021
+  // circular), so this is many-to-one, not one-to-one.
+  /** @type {Map<string, string[]>} */
+  const questionToTds = new Map();
   for (const fact of teardownFacts) {
-    if (fact.mappedQuestion) questionToTd.set(fact.mappedQuestion, fact.id);
+    if (fact.mappedQuestion) {
+      const ids = questionToTds.get(fact.mappedQuestion) ?? [];
+      ids.push(fact.id);
+      questionToTds.set(fact.mappedQuestion, ids);
+    }
   }
 
   /** @type {Set<string>} */
@@ -62,10 +68,11 @@ export function computeCalibration({ quiz, scanTotal, scanPillars, findings, tea
     if (finding.kind === 'teardown' && finding.teardownId) foundTds.add(finding.teardownId);
   }
 
-  /** @type {Array<{ questionId: string; teardownId: string | null; found: boolean }>} */
+  /** @type {Array<{ questionId: string; teardownIds: string[]; found: string[] }>} */
   const moments = hotspots.map((questionId) => {
-    const teardownId = questionToTd.get(questionId) ?? null;
-    return { questionId, teardownId, found: teardownId ? foundTds.has(teardownId) : false };
+    const teardownIds = questionToTds.get(questionId) ?? [];
+    const found = teardownIds.filter((id) => foundTds.has(id));
+    return { questionId, teardownIds, found };
   });
 
   return { selfReport, scan: scanTotal, pillars, moments };

@@ -423,12 +423,16 @@ function renderCalibration(calibration) {
   lines.push('');
   lines.push('## Calibration');
   for (const moment of calibration.moments) {
-    if (moment.found) {
-      lines.push(`- ⚠️ ${moment.questionId} → ${moment.teardownId}: you reported this handled, but the scan found it.`);
-    } else if (moment.teardownId) {
-      lines.push(`- ✅ ${moment.questionId} → ${moment.teardownId}: not found by the scan.`);
-    } else {
+    if (moment.teardownIds.length === 0) {
       lines.push(`- ℹ️ ${moment.questionId}: no static rule covers this question.`);
+      continue;
+    }
+    for (const teardownId of moment.teardownIds) {
+      if (moment.found.includes(teardownId)) {
+        lines.push(`- ⚠️ ${moment.questionId} → ${teardownId}: you reported this handled, but the scan found it.`);
+      } else {
+        lines.push(`- ✅ ${moment.questionId} → ${teardownId}: not found by the scan.`);
+      }
     }
   }
   lines.push('');

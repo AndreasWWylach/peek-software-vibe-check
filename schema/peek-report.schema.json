@@ -165,11 +165,11 @@
     "calibrationMoment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["questionId", "teardownId", "found"],
+      "required": ["questionId", "teardownIds", "found"],
       "properties": {
         "questionId": { "type": "string" },
-        "teardownId": { "type": ["string", "null"] },
-        "found": { "type": "boolean" }
+        "teardownIds": { "type": "array", "items": { "type": "string", "pattern": "^TD-\\d+$" } },
+        "found": { "type": "array", "items": { "type": "string", "pattern": "^TD-\\d+$" } }
       }
     },
     "severity": { "enum": ["critical", "high", "medium", "low"] },

@@ -80,14 +80,31 @@ test('maps hotspots to found / not-found / uncovered teardowns', () => {
   assert.ok(calibration);
 
   const found = calibration.moments.find((moment) => moment.questionId === 'Q2.2');
-  assert.equal(found?.teardownId, 'TD-002');
-  assert.equal(found?.found, true);
+  assert.deepEqual(found?.teardownIds, ['TD-002']);
+  assert.deepEqual(found?.found, ['TD-002']);
 
   const notFound = calibration.moments.find((moment) => moment.questionId === 'Q1.1');
-  assert.equal(notFound?.teardownId, 'TD-016');
-  assert.equal(notFound?.found, false);
+  assert.deepEqual(notFound?.teardownIds, ['TD-016']);
+  assert.deepEqual(notFound?.found, []);
 
   const uncovered = calibration.moments.find((moment) => moment.questionId === 'Q9.9');
-  assert.equal(uncovered?.teardownId, null);
-  assert.equal(uncovered?.found, false);
+  assert.deepEqual(uncovered?.teardownIds, []);
+  assert.deepEqual(uncovered?.found, []);
+});
+
+test('one question maps to multiple teardowns (Q3.1 → TD-019 + TD-021)', () => {
+  const calibration = computeCalibration({
+    quiz: { totalScore: 142, hotspots: ['Q3.1'] },
+    scanTotal: 35,
+    scanPillars,
+    findings: [finding('TD-019')],
+    teardownFacts: [
+      { id: 'TD-019', mappedQuestion: 'Q3.1' },
+      { id: 'TD-021', mappedQuestion: 'Q3.1' },
+    ],
+  });
+  assert.ok(calibration);
+  const moment = calibration.moments[0];
+  assert.deepEqual(moment?.teardownIds, ['TD-019', 'TD-021']);
+  assert.deepEqual(moment?.found, ['TD-019']);
 });

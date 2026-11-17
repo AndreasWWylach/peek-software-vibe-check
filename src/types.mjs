@@ -129,8 +129,8 @@
  * A calibration moment — a quiz hotspot cross-checked against the scan.
  * @typedef {Object} CalibrationMoment
  * @property {string} questionId — quiz question id, e.g. "Q2.2".
- * @property {string | null} teardownId — the mapped teardown, or null when none.
- * @property {boolean} found — true when the scan found that teardown.
+ * @property {string[]} teardownIds — the mapped teardowns ([] when no rule covers it).
+ * @property {string[]} found — the subset of teardownIds the scan actually found.
  */
 
 /**
