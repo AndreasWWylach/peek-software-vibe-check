@@ -13,10 +13,12 @@
  * Gating (offline, deterministic — a pinned PHAR + the project's own autoloader):
  * - runs only when `vendor/autoload.php` exists (a composer-installed app);
  * - plain PHP apps run at level 5 with no extension needed;
- * - framework apps run only when the matching extension is in `vendor/`
- *   (larastan for Laravel, phpstan-symfony for Symfony/Pimcore,
- *   phpstan-doctrine for Doctrine) — otherwise skipped with a note, because
- *   framework magic (facades/DI) floods level-5 analysis with false positives.
+ * - framework apps need the matching extension (larastan for Laravel,
+ *   phpstan-symfony for Symfony/Pimcore, phpstan-doctrine for Doctrine) — the
+ *   app's own `vendor/` copy is used when present, else the engine's vendored
+ *   copy (`rules/vendored/phpstan/`) is loaded via `--autoload-file` + neon
+ *   `includes:`. Larastan is NOT vendored (it needs the app's Illuminate), so
+ *   a Laravel app without larastan is skipped with a note.
  *
  * A minimal neon is generated in the OS temp dir (absolute paths, never written
  * into the user's repo): level 5, the config targets as `paths`, and the
@@ -31,6 +33,7 @@
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
@@ -46,6 +49,9 @@ const FRAMEWORK_EXTENSIONS = /** @type {Record<string, string>} */ ({
   pimcore: 'phpstan/phpstan-symfony',
   doctrine: 'phpstan/phpstan-doctrine',
 });
+
+/** Absolute root of the vendored PHPStan extensions (`rules/vendored/phpstan/`). */
+const VENDORED_EXT_ROOT = fileURLToPath(new URL('../../rules/vendored/phpstan', import.meta.url));
 
 /** Identifiers that are the high-signal "hallucination" class (undefined X). */
 const PHPSTAN_KEEP_RE = /(method|class|function|property|constant|variable|trait|interface)\.(notFound|undefined)/;
@@ -67,6 +73,50 @@ export function phpstanIdentifier(msg) {
   return 'phpstan';
 }
 
+/**
+ * Resolve which framework extensions are loadable, and from where.
+ *
+ * Precedence: the app's own `vendor/` extension (version-accurate, loaded via
+ * PHPStan's extension-installer) → the engine's vendored copy (loaded via
+ * `--autoload-file` + neon `includes:`) → missing (skip with a note).
+ *
+ * @param {Record<string, boolean>} stack
+ * @param {string} repoRoot
+ * @returns {{ includes: string[]; autoloadFile: string | null; vendored: string[]; missing: string[] }}
+ */
+export function resolveExtensions(stack, repoRoot) {
+  /** @type {string[]} absolute `extension.neon` + `rules.neon` to include. */
+  const includes = [];
+  /** @type {string[]} */
+  const vendored = [];
+  /** @type {string[]} */
+  const missing = [];
+  /** @type {Set<string>} dedupe by extension package name (pimcore + symfony share one). */
+  const seen = new Set();
+
+  for (const marker of Object.keys(FRAMEWORK_EXTENSIONS)) {
+    if (!stack[marker]) continue;
+    const ext = FRAMEWORK_EXTENSIONS[marker];
+    if (seen.has(ext)) continue;
+    seen.add(ext);
+
+    // The app ships the extension itself — extension-installer auto-discovers it.
+    if (existsSync(join(repoRoot, 'vendor', ...ext.split('/')))) continue;
+
+    const vendoredDir = join(VENDORED_EXT_ROOT, 'vendor', ...ext.split('/'));
+    if (existsSync(join(vendoredDir, 'extension.neon')) && existsSync(join(vendoredDir, 'rules.neon'))) {
+      vendored.push(ext);
+      includes.push(join(vendoredDir, 'extension.neon'), join(vendoredDir, 'rules.neon'));
+    } else {
+      missing.push(ext);
+    }
+  }
+
+  const vendoredAutoload = join(VENDORED_EXT_ROOT, 'vendor', 'autoload.php');
+  const autoloadFile = vendored.length > 0 && existsSync(vendoredAutoload) ? vendoredAutoload : null;
+  return { includes, autoloadFile, vendored, missing };
+}
+
 /** @type {Provider} */
 export const phpstanProvider = {
   id: 'phpstan',
@@ -80,26 +130,21 @@ export const phpstanProvider = {
       return [];
     }
 
-    const stack = ctx.stack ?? {};
-    const frameworks = Object.keys(FRAMEWORK_EXTENSIONS).filter((marker) => stack[marker]);
-    if (frameworks.length > 0) {
-      const missing = frameworks
-        .map((marker) => FRAMEWORK_EXTENSIONS[marker])
-        .filter((ext) => !existsSync(join(ctx.repoRoot, 'vendor', ...ext.split('/'))))
-        .filter((ext, i, arr) => arr.indexOf(ext) === i);
-      if (missing.length > 0) {
-        ctx.log(`  skipping: framework detected but phpstan extension missing (${missing.join(', ')})`);
-        return [];
-      }
+    const { includes, autoloadFile, vendored, missing } = resolveExtensions(ctx.stack ?? {}, ctx.repoRoot);
+    if (missing.length > 0) {
+      ctx.log(`  skipping: framework detected but phpstan extension missing (${missing.join(', ')})`);
+      return [];
+    }
+    if (vendored.length > 0) {
+      ctx.log(`  using vendored phpstan extension(s): ${vendored.join(', ')}`);
     }
 
-    const neon = writeNeon(ctx, stack);
+    const neon = writeNeon(ctx, includes);
+    /** @type {string[]} */
+    const args = ['analyse', '-c', neon, '--no-progress', '--no-ansi', '--error-format=json'];
+    if (autoloadFile) args.push('--autoload-file', autoloadFile);
     try {
-      const { stdout } = runCommandCapture(
-        'phpstan',
-        ['analyse', '-c', neon, '--no-progress', '--no-ansi', '--error-format=json'],
-        { cwd: ctx.repoRoot },
-      );
+      const { stdout } = runCommandCapture('phpstan', args, { cwd: ctx.repoRoot });
       return parsePhpstanJson(stdout, ctx.repoRoot);
     } finally {
       rmSync(dirname(neon), { recursive: true, force: true });
@@ -110,10 +155,10 @@ export const phpstanProvider = {
 /**
  * Generate a minimal phpstan neon in the OS temp dir (absolute paths only).
  * @param {RunContext} ctx
- * @param {Record<string, boolean>} stack
+ * @param {string[]} includes — absolute `extension.neon`/`rules.neon` paths for vendored extensions.
  * @returns {string} absolute path to the generated `.neon` file.
  */
-function writeNeon(ctx, stack) {
+function writeNeon(ctx, includes) {
   const existing = ctx.targets.filter((target) => existsSync(target));
   const scanDir = mkdtempSync(join(tmpdir(), 'vibe-check-phpstan-'));
 
@@ -122,14 +167,20 @@ function writeNeon(ctx, stack) {
   for (const target of existing) lines.push(`        - ${target}`);
   lines.push(`    tmpDir: ${join(scanDir, 'cache')}`);
   lines.push('    reportUnmatchedIgnoredErrors: false');
-  lines.push('');
 
   // Pimcore ships a stub for its dynamic constants — required for precision.
-  if (stack.pimcore) {
+  if (ctx.stack?.pimcore) {
     const stub = join(ctx.repoRoot, 'vendor', 'pimcore', 'pimcore', 'stubs', 'dynamic-constants.php');
     if (existsSync(stub)) {
       lines.splice(lines.indexOf('    reportUnmatchedIgnoredErrors: false'), 0, '    scanFiles:', `        - ${stub}`);
     }
+  }
+
+  // Vendored framework extensions. Absolute paths: the neon lives in a temp
+  // dir, so relative `includes:` would not resolve against the vendored copy.
+  if (includes.length > 0) {
+    lines.push('', 'includes:');
+    for (const file of includes) lines.push(`    - ${file}`);
   }
 
   const neon = join(scanDir, 'phpstan.neon');

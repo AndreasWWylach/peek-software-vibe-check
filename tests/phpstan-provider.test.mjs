@@ -7,7 +7,10 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { phpstanProvider, phpstanIdentifier, parsePhpstanJson } from '../src/providers/phpstan.mjs';
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { phpstanProvider, phpstanIdentifier, parsePhpstanJson, resolveExtensions } from '../src/providers/phpstan.mjs';
 
 test('phpstanIdentifier passes through the identifier field, else derives it', () => {
   assert.equal(phpstanIdentifier({ identifier: 'method.notFound', message: 'x' }), 'method.notFound');
@@ -52,4 +55,40 @@ test('phpstan applicable gates on the php language', () => {
   const jsConfig = { version: 1, engine: '>=0.1.0', targets: ['src/'], exclude: [], languages: ['javascript'], enabledRules: [], ruleParams: {}, scoring: { weights: { security: 1, runtime: 1, architecture: 1, qa: 1 } }, quiz: undefined };
   assert.equal(phpstanProvider.applicable(phpConfig), true);
   assert.equal(phpstanProvider.applicable(jsConfig), false);
+});
+
+test('resolveExtensions: app copy wins, vendored fallback, larastan stays missing', () => {
+  const root = mkdtempSync(join(tmpdir(), 'vibe-phpstan-ext-'));
+  try {
+    mkdirSync(join(root, 'vendor'), { recursive: true });
+
+    // Symfony app WITHOUT the extension in its vendor → vendored copy.
+    const symfony = resolveExtensions({ symfony: true }, root);
+    assert.equal(symfony.missing.length, 0);
+    assert.equal(symfony.vendored.length, 1);
+    assert.match(symfony.vendored[0] ?? '', /phpstan-symfony/);
+    assert.equal(symfony.includes.length, 2, 'extension.neon + rules.neon');
+    assert.ok(symfony.autoloadFile, 'vendored autoload path set');
+
+    // App ships the extension → nothing vendored, nothing missing.
+    mkdirSync(join(root, 'vendor', 'phpstan', 'phpstan-symfony'), { recursive: true });
+    const appOwned = resolveExtensions({ symfony: true }, root);
+    assert.equal(appOwned.vendored.length, 0);
+    assert.equal(appOwned.includes.length, 0);
+    assert.equal(appOwned.missing.length, 0);
+    assert.equal(appOwned.autoloadFile, null);
+
+    // Pimcore + symfony share one extension — no double-include.
+    rmSync(join(root, 'vendor', 'phpstan', 'phpstan-symfony'), { recursive: true, force: true });
+    const both = resolveExtensions({ pimcore: true, symfony: true }, root);
+    assert.equal(both.vendored.length, 1);
+    assert.equal(both.includes.length, 2);
+
+    // Laravel without larastan (not vendored) → missing → skip.
+    const laravel = resolveExtensions({ laravel: true }, root);
+    assert.equal(laravel.missing.length, 1);
+    assert.match(laravel.missing[0] ?? '', /larastan/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

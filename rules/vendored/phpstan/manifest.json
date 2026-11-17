@@ -1,0 +1,9 @@
+{
+  "source": "https://packagist.org",
+  "pinned": {
+    "phpstan/phpstan-symfony": "2.1.1",
+    "phpstan/phpstan-doctrine": "2.1.2"
+  },
+  "phpstanVersion": "2.3.1",
+  "vendoredAt": "2026-11-17"
+}

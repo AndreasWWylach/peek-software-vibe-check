@@ -9,12 +9,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { commandAvailable, runCommandCapture } from '../src/proc.mjs';
-import { parsePhpstanJson } from '../src/providers/phpstan.mjs';
+import { parsePhpstanJson, phpstanProvider } from '../src/providers/phpstan.mjs';
 
 const FIXTURE = fileURLToPath(new URL('./fixtures/phpstan/bad.php', import.meta.url));
 
@@ -52,5 +52,34 @@ test('phpstan golden: undefined method/class/function fire as QA advisories', { 
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('phpstan golden: vendored extension loads for a framework app without its own extension', { skip: skipReason }, async () => {
+  const root = mkdtempSync(join(tmpdir(), 'vibe-phpstan-vendored-'));
+  try {
+    // A minimal composer app: real `vendor/autoload.php` gate, no framework
+    // extension installed — the engine must load the vendored copy.
+    mkdirSync(join(root, 'vendor'), { recursive: true });
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'vendor', 'autoload.php'), '<?php // minimal app autoload\n', 'utf8');
+    writeFileSync(join(root, 'src', 'bad.php'), '<?php\nfunction demo(): void { new UndefinedVendoredClass(); }\n', 'utf8');
+
+    /** @type {import('../src/types.mjs').RunContext} */
+    const ctx = {
+      repoRoot: root,
+      targets: [join(root, 'src')],
+      stack: { symfony: true },
+      log: () => {},
+    };
+    const findings = await phpstanProvider.run(/** @type {any} */ ({}), /** @type {any} */ (ctx));
+    const ids = findings.map((f) => f.source.ruleId);
+    assert.ok(ids.includes('class.notFound'), `expected class.notFound via vendored extension, got ${ids.join(', ')}`);
+    for (const f of findings) {
+      assert.equal(f.advisory, true);
+      assert.equal(f.pillar, 'qa');
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
