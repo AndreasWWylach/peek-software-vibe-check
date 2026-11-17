@@ -138,7 +138,8 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 ├── rules/
 │   ├── peek/<TD-id>/<lang>.yaml  # custom Semgrep rules — one per (TD × language)
 │   ├── hygiene/*.yaml            # always-on LastMile hardening rules (XSS / open redirect / eval)
-│   └── vendored/php/…            # vendored Semgrep PHP packs (lang/laravel/symfony/doctrine/wordpress) + manifest.json
+│   ├── vendored/php/…            # vendored Semgrep PHP packs (lang/laravel/symfony/doctrine/wordpress) + manifest.json
+│   └── vendored/phpstan/…        # vendored PHPStan extensions (phpstan-symfony, phpstan-doctrine) + manifest.json
 ├── catalog/
 │   └── teardowns.json         # VENDORED facts snapshot (id/pillar/severity/points/fixSummary/languages)
 ├── tests/
@@ -384,14 +385,17 @@ remain the reliable TD-016 net on Go.
 A **`phpstan` provider** (optional, single pinned PHAR — needs PHP ≥ 8.1) gives
 PHP the structural/type checks Semgrep can't: undefined classes, methods and
 functions — the hallmark of AI hallucination. Gated: runs only when
-`vendor/autoload.php` exists (a composer-installed app); framework apps run only
-when the matching extension is in `vendor/` (larastan, phpstan-symfony,
-phpstan-doctrine), otherwise skipped with a note — framework magic (facades/DI)
-floods level-5 analysis with false positives. A minimal level-5 neon is
-generated in the OS temp dir (Pimcore's dynamic-constants stub included). Only
-the hallucination class is reported (`*.notFound` / `*.undefined` identifiers);
-style (ergebnis/*) and type-mismatch noise is dropped, so the QA advisory
-section stays a sharp signal. All phpstan findings are **advisories** (unscored).
+`vendor/autoload.php` exists (a composer-installed app). Framework apps need the
+matching extension (larastan, phpstan-symfony, phpstan-doctrine) — the app's own
+`vendor/` copy is used when present, else the engine's vendored copy
+(`rules/vendored/phpstan/`, pinned by `scripts/vendor-phpstan-extensions.mjs`) is
+loaded via `--autoload-file` + neon `includes:`. Larastan is deliberately NOT
+vendored (it needs the app's own Illuminate/container), so a Laravel app without
+larastan is skipped with a note. A minimal level-5 neon is generated in the OS
+temp dir (Pimcore's dynamic-constants stub included). Only the hallucination
+class is reported (`*.notFound` / `*.undefined` identifiers); style (ergebnis/*)
+and type-mismatch noise is dropped, so the QA advisory section stays a sharp
+signal. All phpstan findings are **advisories** (unscored).
 
 **Catalog enrichment (single source of truth for scoring):** every finding that
 maps to a `teardownId` — from semgrep, bandit or gosec — is enriched from

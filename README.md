@@ -25,9 +25,9 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [trivy](https://trivy.dev) — filesystem vulnerability + secret scanning (optional)
 - [bandit](https://bandit.readthedocs.io) — Python security SAST (optional, Python repos only)
 - [gosec](https://github.com/securego/gosec) — Go security SAST (optional, Go repos only)
-- [phpstan](https://phpstan.org) — PHP static analysis, hallucination checks (optional, composer-installed PHP apps)
+- [phpstan](https://phpstan.org) — PHP static analysis, hallucination checks (optional, PHP ≥ 8.1; composer-installed PHP apps)
 
-The **tests**, **dependency-hygiene**, **security-headers**, **CI** and **Firebase** providers are built into the engine — no binary to install. The **Semgrep PHP packs** (core + Laravel/Symfony/Doctrine/WordPress) are vendored into `rules/vendored/php/` (offline, pinned SHA) and selected automatically from `composer.json`.
+The **tests**, **dependency-hygiene**, **security-headers**, **CI** and **Firebase** providers are built into the engine — no binary to install. The **Semgrep PHP packs** (core + Laravel/Symfony/Doctrine/WordPress) are vendored into `rules/vendored/php/` (offline, pinned SHA) and selected automatically from `composer.json`. The **PHPStan framework extensions** (phpstan-symfony, phpstan-doctrine) are likewise vendored into `rules/vendored/phpstan/` — Symfony/Pimcore/Doctrine apps need only the `phpstan` PHAR, no Composer. **Laravel** is the one exception: `larastan` is *not* vendored (it boots the app's own Illuminate), so run `composer require --dev larastan/larastan` inside the Laravel app first.
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 

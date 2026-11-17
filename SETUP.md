@@ -14,7 +14,7 @@ bash setup.sh
 missing), clones the pinned engine release, installs its single runtime
 dependency, exposes `vibe-check` on your PATH, and runs the **onboarding** to
 install the provider tools (semgrep, osv-scanner, madge, scc, gitleaks, eslint, and optional checkov + hadolint + trivy + bandit + gosec + phpstan).
-The **tests**, dependency-hygiene, security-headers, CI and Firebase providers are built into the engine — no install. Everything prints
+The **tests**, dependency-hygiene, security-headers, CI and Firebase providers are built into the engine — no install. The **Semgrep PHP packs** and the **PHPStan framework extensions** (phpstan-symfony, phpstan-doctrine) are vendored in the repo — Symfony/Pimcore/Doctrine apps need only the `phpstan` PHAR, no Composer. **Laravel** is the one exception: `larastan` is not vendored (it boots the app's own Illuminate), so run `composer require --dev larastan/larastan` inside the Laravel app first. Everything prints
 before it runs, and you can interrupt at any time — re-run to resume.
 
 ## 2. Get your config
