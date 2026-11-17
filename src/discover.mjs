@@ -59,6 +59,22 @@ export function discoverSourceDirs(repoRoot, languages) {
 }
 
 /**
+ * Drop top-level dirs already covered by a configured target — either exactly
+ * (`src/`) or via a configured subdir (`frontend/src/` covers `frontend/`).
+ * Auto-including the parent would sweep in build output (`frontend/dist/`).
+ * @param {string[]} discovered — dirs from `discoverSourceDirs` (trailing slash).
+ * @param {Set<string>} configured — normalized config targets (no trailing slash).
+ * @returns {string[]}
+ */
+export function skipCoveredDirs(discovered, configured) {
+  return discovered.filter((dir) => {
+    const base = dir.replace(/[/\\]+$/, '');
+    if (configured.has(base)) return false;
+    return ![...configured].some((target) => target === base || target.startsWith(`${base}/`));
+  });
+}
+
+/**
  * Does `dir` recursively contain at least one source file of the given exts?
  * @param {string} dir
  * @param {Set<string>} exts

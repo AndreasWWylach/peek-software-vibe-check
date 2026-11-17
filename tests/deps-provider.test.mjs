@@ -10,7 +10,17 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { depsProvider, isFloatingNpm, isFloatingComposer, isFloatingRequirement, isComposerPlatformPackage } from '../src/providers/deps.mjs';
+import { depsProvider, declaresDependencies, isFloatingNpm, isFloatingComposer, isFloatingRequirement, isComposerPlatformPackage } from '../src/providers/deps.mjs';
+
+test('declaresDependencies: scripts-only root has nothing to pin', () => {
+  assert.equal(declaresDependencies('package.json', JSON.stringify({ name: 'root', scripts: { test: 'npm test' } })), false);
+  assert.equal(declaresDependencies('package.json', JSON.stringify({ dependencies: {} })), false);
+  assert.equal(declaresDependencies('package.json', JSON.stringify({ devDependencies: { vitest: '^1' } })), true);
+  assert.equal(declaresDependencies('composer.json', JSON.stringify({ name: 'a' })), false);
+  assert.equal(declaresDependencies('composer.json', JSON.stringify({ require: { php: '^8' } })), true);
+  // Unparseable → do not suppress the lockfile check.
+  assert.equal(declaresDependencies('package.json', '{oops'), true);
+});
 
 test('isFloatingNpm flags unbounded versions, accepts caret/tilde', () => {
   assert.equal(isFloatingNpm('*'), true);

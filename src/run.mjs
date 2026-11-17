@@ -32,7 +32,7 @@ import { banditProvider } from './providers/bandit.mjs';
 import { gosecProvider } from './providers/gosec.mjs';
 import { phpstanProvider } from './providers/phpstan.mjs';
 import { isTestFile } from './ignore.mjs';
-import { discoverSourceDirs } from './discover.mjs';
+import { discoverSourceDirs, skipCoveredDirs } from './discover.mjs';
 import { detectAppCheckOff, detectStack } from './stack.mjs';
 import { corroborateFindings, dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
@@ -83,9 +83,10 @@ export async function run(configPath, options) {
   // targets and auto-included dirs.
   const excludes = (config.exclude ?? []).map(normalizeRelPath);
   const configured = new Set(config.targets.map((target) => target.replace(/[/\\]+$/, '')));
-  const autoIncluded = discoverSourceDirs(options.repoRoot, config.languages)
-    .filter((dir) => !configured.has(dir.replace(/\/$/, '')))
-    .filter((dir) => !isExcludedPath(excludes, dir));
+  const autoIncluded = skipCoveredDirs(
+    discoverSourceDirs(options.repoRoot, config.languages),
+    configured,
+  ).filter((dir) => !isExcludedPath(excludes, dir));
   const explicitTargets = config.targets.filter((target) => !isExcludedPath(excludes, target));
   const excludedConfigured = config.targets.filter((target) => isExcludedPath(excludes, target));
   if (excludedConfigured.length > 0) {

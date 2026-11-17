@@ -15,9 +15,10 @@
  * `groups[].max_severity` CVSS score (v2), with a fallback to the
  * `database_specific.severity` word on the detailed vulnerability entries.
  */
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
+import { IGNORED_DIRS } from '../ignore.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').ScanConfig} ScanConfig */
@@ -56,15 +57,36 @@ const ROOT_LOCKFILES = [
 ];
 
 /**
- * Absolute paths of lockfiles that sit directly at the repo root (outside the
- * scan `targets`). osv-scanner would otherwise miss them when targets are a
- * folder-derived subset.
+ * Absolute paths of every lockfile in the repo (root + workspace subdirs),
+ * skipping ignored dirs. osv-scanner needs these explicit paths because the
+ * config `targets` are source dirs that may not contain the lockfiles.
  * @param {string} repoRoot
  * @returns {string[]}
  */
-export function collectRootLockfiles(repoRoot) {
-  return ROOT_LOCKFILES.map((name) => join(repoRoot, name))
-    .filter((file) => existsSync(file));
+export function collectRepoLockfiles(repoRoot) {
+  /** @type {string[]} */
+  const found = [];
+  /** @param {string} dir */
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      const abs = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (IGNORED_DIRS.has(entry.name)) continue;
+        walk(abs);
+      } else if (entry.isFile() && ROOT_LOCKFILES.includes(entry.name)) {
+        found.push(abs);
+      }
+    }
+  };
+  walk(repoRoot);
+  return found.sort();
 }
 
 /** @type {Provider} */
@@ -82,7 +104,7 @@ export const osvProvider = {
     // Lockfiles almost always live at the repo root, which the config
     // `targets` (source-scan hints) may exclude — scan them explicitly so a
     // monorepo- or folder-derived target list can't silently skip CVEs.
-    const scanTargets = [...targets, ...collectRootLockfiles(ctx.repoRoot)];
+    const scanTargets = [...targets, ...collectRepoLockfiles(ctx.repoRoot)];
     // `--allow-no-lockfiles` keeps a lockfile-less repo a 0-finding result
     // (not an error). osv-scanner exits non-zero when it FINDS vulns, so
     // capture stdout regardless of exit status.

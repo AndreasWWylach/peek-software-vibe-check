@@ -54,6 +54,30 @@ const NPM_DEP_KEYS = ['dependencies', 'devDependencies', 'peerDependencies', 'op
 /** Dependency maps in `composer.json` whose string values are version ranges. */
 const COMPOSER_DEP_KEYS = ['require', 'require-dev'];
 
+/**
+ * Does this manifest actually declare any dependencies? A scripts-only
+ * `package.json` (a monorepo root) has nothing to pin, so a missing lockfile
+ * there is not a gap.
+ * @param {string} base
+ * @param {string} content
+ * @returns {boolean}
+ */
+export function declaresDependencies(base, content) {
+  if (base === 'package.json' || base === 'composer.json') {
+    const keys = base === 'package.json' ? NPM_DEP_KEYS : COMPOSER_DEP_KEYS;
+    try {
+      const manifest = JSON.parse(content);
+      return keys.some((key) => {
+        const deps = manifest[key];
+        return deps && typeof deps === 'object' && Object.keys(deps).length > 0;
+      });
+    } catch {
+      return true; // unparseable — do not suppress the lockfile check
+    }
+  }
+  return true;
+}
+
 /** Unconditionally-moving npm versions (`*`, `latest`, URL/git/file refs, …). */
 const FLOATING_NPM_RE = /^(\*|latest|next|dev|x|file:|link:|git:|git\+|https?:|workspace:|npm:)/i;
 
@@ -65,22 +89,11 @@ export const depsProvider = {
   available: () => Promise.resolve(true),
   applicable: () => true,
   async run(_config, ctx) {
-    const targets = ctx.targets.filter((target) => existsSync(target));
-    if (targets.length === 0) {
-      ctx.log('  no existing targets — nothing to scan');
-      return [];
-    }
-
     /** @type {string[]} */
     const seen = [];
-    for (const target of targets) {
-      collectFiles(target, ctx.repoRoot, seen);
-    }
-    // Root-level manifests live outside scan targets (like root lockfiles do)
-    // but drive the whole app's dependency graph — always include them.
-    for (const base of [...MANIFEST_LOCKFILES.keys(), REQUIREMENTS]) {
-      if (existsSync(join(ctx.repoRoot, base))) seen.push(base);
-    }
+    // Manifests live at package boundaries (repo root + workspace subdirs), not
+    // inside source targets — walk the whole repo, skipping ignored dirs.
+    collectFiles(ctx.repoRoot, ctx.repoRoot, seen);
     // Deduplicate (overlapping targets) and keep only known manifests.
     const manifests = [...new Set(seen)].filter((file) => {
       const base = file.split(/[\\/]/).pop() ?? '';
@@ -102,7 +115,7 @@ export const depsProvider = {
         continue;
       }
 
-      if (base !== REQUIREMENTS) {
+      if (base !== REQUIREMENTS && declaresDependencies(base, content)) {
         const lockfiles = MANIFEST_LOCKFILES.get(base) ?? [];
         const hasLockfile = lockfiles.some((lock) => existsSync(join(dirname(abs), lock)));
         // A monorepo may keep one lockfile at the root while package.json files

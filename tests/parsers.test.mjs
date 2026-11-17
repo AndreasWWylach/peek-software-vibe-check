@@ -15,7 +15,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseSemgrepJson } from '../src/providers/semgrep.mjs';
-import { collectRootLockfiles, parseOsvJson } from '../src/providers/osv.mjs';
+import { collectRepoLockfiles, parseOsvJson } from '../src/providers/osv.mjs';
 import { isSecretConfigFile } from '../src/ignore.mjs';
 import { isInertSecret, isPublicByDesignValue } from '../src/secretClassify.mjs';
 import { parseMadgeJson } from '../src/providers/madge.mjs';
@@ -168,17 +168,19 @@ test('osv: defaults severity to medium when the scanner reports none', () => {
   assert.deepEqual(finding.dependency?.cveIds, ['CVE-2021-0000']);
 });
 
-test('collectRootLockfiles finds root lockfiles only (not arbitrary files)', () => {
+test('collectRepoLockfiles finds root + subdir lockfiles, skipping ignored dirs', () => {
   const root = mkdtempSync(join(tmpdir(), 'vibe-osv-'));
   try {
     writeFileSync(join(root, 'composer.lock'), '{}');
     writeFileSync(join(root, 'package-lock.json'), '{}');
     writeFileSync(join(root, 'README.md'), 'not a lockfile');
-    mkdirSync(join(root, 'src'), { recursive: true });
-    writeFileSync(join(root, 'src', 'app.php'), '<?php');
+    mkdirSync(join(root, 'backend'), { recursive: true });
+    writeFileSync(join(root, 'backend', 'package-lock.json'), '{}');
+    mkdirSync(join(root, 'node_modules', 'pkg'), { recursive: true });
+    writeFileSync(join(root, 'node_modules', 'pkg', 'package-lock.json'), '{}');
 
-    const found = collectRootLockfiles(root).map((file) => file.split('/').pop()).sort();
-    assert.deepEqual(found, ['composer.lock', 'package-lock.json']);
+    const found = collectRepoLockfiles(root).map((file) => file.slice(root.length).replace(/^\//, '')).sort();
+    assert.deepEqual(found, ['backend/package-lock.json', 'composer.lock', 'package-lock.json']);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
