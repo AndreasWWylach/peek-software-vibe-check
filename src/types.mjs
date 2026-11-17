@@ -150,7 +150,13 @@
  * @property {Array<{ pillar: Pillar; selfReport: number; scan: number }>} pillars
  * @property {CalibrationMoment[]} moments
  */
-
+/**
+ * The go-live readiness verdict — an honest go/no-go call on top of the risk
+ * score (which measures code defectiveness, not launch readiness).
+ * @typedef {Object} Readiness
+ * @property {'go' | 'conditional' | 'no-go'} status
+ * @property {string[]} conditions — human-readable launch conditions.
+ */
 /**
  * The complete audit report object (mirrors peek-report.schema.json).
  * @typedef {Object} Report
@@ -165,6 +171,7 @@
  * @property {DisabledCheck[]} disabledChecks — opt-in checks left disabled (not scored).
  * @property {Array<{ teardownId: string; title: string; guidance: string }>} notStaticallyVerifiable
  * @property {Calibration | undefined} calibration — self-report vs scan (when quiz data present).
+ * @property {Readiness | undefined} [readiness] - go-live verdict (go / conditional / no-go).
  * @property {Record<string, boolean> | undefined} [stack] - scan-time stack markers (Firebase/Firestore/Prisma/…).
  */
 

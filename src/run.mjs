@@ -33,10 +33,11 @@ import { gosecProvider } from './providers/gosec.mjs';
 import { phpstanProvider } from './providers/phpstan.mjs';
 import { isTestFile } from './ignore.mjs';
 import { discoverSourceDirs } from './discover.mjs';
-import { detectStack } from './stack.mjs';
+import { detectAppCheckOff, detectStack } from './stack.mjs';
 import { corroborateFindings, dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
+import { computeReadiness } from './readiness.mjs';
 import { listTeardowns } from './catalog.mjs';
 import { renderMarkdown } from './report.mjs';
 import { createValidator, loadSchema, validate } from './schema-loader.mjs';
@@ -48,6 +49,16 @@ import { ENGINE_NAME, ENGINE_VERSION, readCommit } from './version.mjs';
 
 /** Absolute path to the published report schema (used for the output self-check). */
 const REPORT_SCHEMA_PATH = fileURLToPath(new URL('../schema/peek-report.schema.json', import.meta.url));
+
+/**
+ * True when a `ci`-provider advisory with the given ruleId is present.
+ * @param {import('./types.mjs').Finding[]} findings
+ * @param {string} ruleId
+ * @returns {boolean}
+ */
+function hasCiAdvisory(findings, ruleId) {
+  return findings.some((f) => f.source.provider === 'ci' && f.source.ruleId === ruleId);
+}
 
 /**
  * Run the full audit: load config, run providers, dedupe, score, render, write.
@@ -145,6 +156,19 @@ export async function run(configPath, options) {
     teardownFacts,
   });
 
+  // Go-live readiness: dependency CVE severity + CI maturity + App Check +
+  // disabled checks — the signals the headline score deliberately excludes.
+  const readiness = computeReadiness({
+    deps: { critical: dependencies.critical, high: dependencies.high },
+    ci: {
+      noPipeline: hasCiAdvisory(sorted, 'no-pipeline'),
+      noTests: hasCiAdvisory(sorted, 'no-tests'),
+      noCoverage: hasCiAdvisory(sorted, 'no-coverage'),
+    },
+    appCheckOff: detectAppCheckOff(options.repoRoot, stack),
+    disabledCount: disabled.length,
+  });
+
   const report = /** @type {Report} */ ({
     schemaVersion: 1,
     engine: { name: ENGINE_NAME, version: ENGINE_VERSION, commit: readCommit() },
@@ -157,6 +181,7 @@ export async function run(configPath, options) {
     disabledChecks: disabled,
     notStaticallyVerifiable: [],
     stack,
+    readiness,
     ...(calibration ? { calibration } : {}),
   });
 

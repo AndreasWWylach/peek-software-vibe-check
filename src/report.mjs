@@ -78,6 +78,9 @@ export function renderMarkdown(report) {
   lines.push(`**Engine:** ${engine.name} ${engine.version} (public, commit ${engine.commit ?? 'n/a'})`);
   lines.push('');
   lines.push(...renderVerdict(riskScore, codeFindings, dependencies, dependencyFindings));
+  if (report.readiness) {
+    lines.push(...renderReadiness(report.readiness));
+  }
   lines.push('## Overall Risk');
   lines.push(`- **Your code:** ${riskScore.total} / ${riskScore.max} — ${TIER_EMOJI[riskScore.tier]} ${TIER_LABEL[riskScore.tier]}`);
   if (dependencies && dependencies.total > 0) {
@@ -259,6 +262,26 @@ function renderVerdict(riskScore, codeFindings, dependencies, dependencyFindings
     );
   }
 
+  lines.push('');
+  return lines;
+}
+
+/**
+ * Render the go-live readiness verdict (go / conditional / no-go) with its
+ * concrete launch conditions. Leads the report because it answers the question
+ * the headline score does not: "can I ship this?".
+ * @param {import('./types.mjs').Readiness} readiness
+ * @returns {string[]}
+ */
+function renderReadiness(readiness) {
+  /** @type {string[]} */
+  const lines = ['## Go-Live Readiness'];
+  const emoji = readiness.status === 'go' ? '🟢' : readiness.status === 'conditional' ? '🟡' : '🔴';
+  const label = readiness.status === 'go' ? 'Ready to go live' : readiness.status === 'conditional' ? 'Ready with conditions' : 'Do not go live';
+  lines.push(`**${emoji} ${label}**`);
+  for (const condition of readiness.conditions) {
+    lines.push(`- ${condition}`);
+  }
   lines.push('');
   return lines;
 }

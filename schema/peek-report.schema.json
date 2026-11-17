@@ -32,7 +32,8 @@
       "description": "Behavioral/architectural TDs that cannot be scored statically; reported as guidance, never scored.",
       "items": { "$ref": "#/definitions/notVerifiable" }
     },
-    "calibration": { "$ref": "#/definitions/calibration" }
+    "calibration": { "$ref": "#/definitions/calibration" },
+    "readiness": { "$ref": "#/definitions/readiness" }
   },
   "definitions": {
     "engineInfo": {
@@ -180,6 +181,15 @@
         "questionId": { "type": "string" },
         "teardownIds": { "type": "array", "items": { "type": "string", "pattern": "^TD-\\d+$" } },
         "found": { "type": "array", "items": { "type": "string", "pattern": "^TD-\\d+$" } }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "conditions"],
+      "properties": {
+        "status": { "enum": ["go", "conditional", "no-go"] },
+        "conditions": { "type": "array", "items": { "type": "string" } }
       }
     },
     "severity": { "enum": ["critical", "high", "medium", "low"] },

@@ -299,3 +299,56 @@ function recordFile(rulesFiles, name, abs, repoRoot) {
   const repoFile = isAbsolute(abs) ? relative(repoRoot, abs).replace(/^[/\\]+/, '') : abs;
   rulesFiles.set(name, repoFile);
 }
+
+/**
+ * Recursively collect JS source text under a directory (skips ignored dirs).
+ * @param {string} dir
+ * @param {string[]} out — text chunks, appended in place.
+ */
+function collectJsText(dir, out) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
+    const abs = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (IGNORED_DIRS.has(entry.name)) continue;
+      collectJsText(abs, out);
+    } else if (entry.isFile() && /\.(js|mjs|cjs)$/i.test(entry.name)) {
+      try {
+        out.push(readFileSync(abs, 'utf8'));
+      } catch {
+        // unreadable — skip
+      }
+    }
+  }
+}
+
+/**
+ * Whether Firebase App Check enforcement is OFF (callers are not verified).
+ *
+ * Readiness signal, not a rule: an app whose callables do not enforce App Check
+ * accepts a forged client SDK, so it is a go-live condition. Returns null when
+ * the app is not a Firebase Cloud Functions app.
+ * @param {string} repoRoot
+ * @param {Record<string, boolean> | undefined} stack
+ * @returns {boolean | null} true = off, false = enforced, null = not applicable.
+ */
+export function detectAppCheckOff(repoRoot, stack) {
+  if (!stack?.cloudFunctions && !stack?.firebaseAdmin) return null;
+  /** @type {string[]} */
+  const chunks = [];
+  for (const dir of [join(repoRoot, 'functions'), join(repoRoot, 'src')]) {
+    if (existsSync(dir)) collectJsText(dir, chunks);
+  }
+  const text = chunks.join('\n');
+  // No App Check wiring at all → off. Literal `enforceAppCheck: true` → on.
+  // The env-flag pattern (`enforceAppCheck: APP_CHECK_ENFORCE`, default off) →
+  // off, which is the standard no-staging deployment seen in the wild.
+  if (!/enforceAppCheck|APP_CHECK_ENFORCE/.test(text)) return true;
+  return !/enforceAppCheck\s*:\s*true/.test(text);
+}
