@@ -70,6 +70,10 @@ export const sccProvider = {
     const threshold = readThreshold(config);
     if (threshold === null) {
       ctx.log('  TD-019 disabled (set ruleParams.maxFileLines to enable)');
+      ctx.noteDisabled?.(
+        'scc:TD-019',
+        'monolithic-file detection (TD-019) is opt-in — set `ruleParams.maxFileLines` in the config to enable it.',
+      );
       return [];
     }
     const targets = ctx.targets.filter((target) => existsSync(target));

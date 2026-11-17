@@ -62,7 +62,7 @@ export function fixPath(teardownIds) {
  * @returns {string}
  */
 export function renderMarkdown(report) {
-  const { engine, generatedAt, riskScore, pillars, findings, skippedProviders, notStaticallyVerifiable, dependencies } = report;
+  const { engine, generatedAt, riskScore, pillars, findings, skippedProviders, disabledChecks, notStaticallyVerifiable, dependencies } = report;
   const dependencyFindings = findings.filter((finding) => finding.kind === 'dependency');
   const testFindings = findings.filter((finding) => finding.inTests === true);
   const advisories = findings.filter((finding) => finding.advisory === true);
@@ -150,6 +150,15 @@ export function renderMarkdown(report) {
     lines.push('## Skipped Checks');
     for (const skipped of skippedProviders) {
       lines.push(`- **${skipped.id}** (${skipped.reason}): ${skipped.detail ?? ''}`);
+    }
+  }
+
+  if ((disabledChecks ?? []).length > 0) {
+    lines.push('');
+    lines.push('## Disabled Checks');
+    lines.push('_These checks were not scored — the risk score above does not cover them._');
+    for (const check of disabledChecks) {
+      lines.push(`- **${check.id}** — ${check.detail}`);
     }
   }
 

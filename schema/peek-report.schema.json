@@ -21,6 +21,7 @@
       "$ref": "#/definitions/dependencySummary"
     },
     "skippedProviders": { "type": "array", "items": { "$ref": "#/definitions/skippedProvider" } },
+    "disabledChecks": { "type": "array", "items": { "$ref": "#/definitions/disabledCheck" } },
     "stack": {
       "type": "object",
       "description": "Scan-time stack markers (Firebase, Firestore, Prisma, React, …) — each value is boolean true when detected.",
@@ -129,6 +130,15 @@
         "id": { "type": "string" },
         "reason": { "enum": ["not-installed", "not-applicable", "error"] },
         "detail": { "type": ["string", "null"] }
+      }
+    },
+    "disabledCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "detail"],
+      "properties": {
+        "id": { "type": "string" },
+        "detail": { "type": "string" }
       }
     },
     "notVerifiable": {

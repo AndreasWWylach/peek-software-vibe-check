@@ -93,6 +93,14 @@
  */
 
 /**
+ * A check the engine left DISABLED (an opt-in rule not enabled) — surfaced so
+ * a low score is never mistaken for "every check ran and passed".
+ * @typedef {Object} DisabledCheck
+ * @property {string} id — e.g. "scc:TD-019".
+ * @property {string} detail — why it is off, and how to enable it.
+ */
+
+/**
  * The validated scan configuration (`peek-config.json`).
  * @typedef {Object} ScanConfig
  * @property {number} version — config schema version.
@@ -113,6 +121,7 @@
  * @property {string[]} targets — resolved target paths (absolute).
  * @property {Record<string, boolean> | undefined} stack — detected framework/service markers.
  * @property {(line: string) => void} log — progress sink.
+ * @property {(id: string, detail: string) => void} noteDisabled — record an opt-in check left disabled (not scored).
  */
 
 /**
@@ -153,6 +162,7 @@
  * @property {Finding[]} findings
  * @property {DependencySummary} dependencies — CVE rollup (reported separately from the code score).
  * @property {SkipRecord[]} skippedProviders
+ * @property {DisabledCheck[]} disabledChecks — opt-in checks left disabled (not scored).
  * @property {Array<{ teardownId: string; title: string; guidance: string }>} notStaticallyVerifiable
  * @property {Calibration | undefined} calibration — self-report vs scan (when quiz data present).
  * @property {Record<string, boolean> | undefined} [stack] - scan-time stack markers (Firebase/Firestore/Prisma/…).

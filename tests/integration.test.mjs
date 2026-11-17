@@ -94,6 +94,14 @@ test(
     assert.ok(markdown.includes('| Security & Secret Hygiene |'), 'expected the pillar table row');
     assert.ok(markdown.includes('⚠️ Q1.1'), 'expected the found hotspot to be flagged');
     assert.ok(markdown.includes('✅ Q1.3'), 'expected the not-found hotspot to pass');
+
+    // Opt-in checks left disabled must surface: the sample config sets no
+    // `ruleParams.maxFileLines`, so monolithic-file detection (TD-019) is off —
+    // the report must say so rather than imply "every check ran".
+    assert.ok(
+      report.disabledChecks.some((check) => check.id === 'scc:TD-019'),
+      'expected scc TD-019 to be reported as disabled',
+    );
   },
 );
 

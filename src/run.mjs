@@ -44,6 +44,7 @@ import { ENGINE_NAME, ENGINE_VERSION, readCommit } from './version.mjs';
 
 /** @typedef {import('./types.mjs').Report} Report */
 /** @typedef {import('./types.mjs').RunContext} RunContext */
+/** @typedef {import('./types.mjs').DisabledCheck} DisabledCheck */
 
 /** Absolute path to the published report schema (used for the output self-check). */
 const REPORT_SCHEMA_PATH = fileURLToPath(new URL('../schema/peek-report.schema.json', import.meta.url));
@@ -92,8 +93,16 @@ export async function run(configPath, options) {
   // markers, so they never disagree about what the app is built on.
   const stack = detectStack(options.repoRoot, targets);
 
+  /** @type {DisabledCheck[]} */
+  const disabled = [];
   /** @type {RunContext} */
-  const ctx = { repoRoot: options.repoRoot, targets, stack, log };
+  const ctx = {
+    repoRoot: options.repoRoot,
+    targets,
+    stack,
+    log,
+    noteDisabled: (id, detail) => disabled.push({ id, detail }),
+  };
 
   const { findings, skipped } = await runProviders(
     [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider, depsProvider, headersProvider, ciProvider, checkovProvider, hadolintProvider, trivyProvider, banditProvider, gosecProvider, phpstanProvider],
@@ -145,6 +154,7 @@ export async function run(configPath, options) {
     findings: sorted,
     dependencies,
     skippedProviders: skipped,
+    disabledChecks: disabled,
     notStaticallyVerifiable: [],
     stack,
     ...(calibration ? { calibration } : {}),

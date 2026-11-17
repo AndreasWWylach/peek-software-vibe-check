@@ -261,6 +261,25 @@ test('renderMarkdown omits the App Stack section when no markers were detected',
   assert.ok(!markdown.includes('## App Stack'), markdown);
 });
 
+test('renderMarkdown surfaces disabled checks so a low score is not read as all-clear', () => {
+  const report = {
+    engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
+    generatedAt: '2026-11-13T00:00:00.000Z',
+    riskScore: { total: 0, max: 350, tier: 'green', riskPercentage: 0 },
+    pillars: [],
+    findings: [],
+    dependencies: { total: 0, critical: 0, high: 0, medium: 0, low: 0 },
+    skippedProviders: [],
+    disabledChecks: [{ id: 'scc:TD-019', detail: 'monolithic-file detection is opt-in — set `ruleParams.maxFileLines`.' }],
+    notStaticallyVerifiable: [],
+  };
+
+  const markdown = renderMarkdown(/** @type {any} */ (report));
+  assert.ok(markdown.includes('## Disabled Checks'), markdown);
+  assert.ok(markdown.includes('scc:TD-019'), markdown);
+  assert.ok(markdown.includes('were not scored'), markdown);
+});
+
 test('renderMarkdown reports Pimcore as Twig, not React (admin UI is not the frontend)', () => {
   const report = {
     engine: { name: 'vibe-check', version: '0.1.0', commit: 'abc1234' },
