@@ -30,22 +30,27 @@ import { ENGINE_NAME, ENGINE_VERSION } from './version.mjs';
 /** Absolute path to the vendored PHP ruleset manifest. */
 const VENDORED_MANIFEST = fileURLToPath(new URL('../rules/vendored/php/manifest.json', import.meta.url));
 
-/** Warn in `doctor` when the vendored rulesets are older than this (days). */
+/** Absolute path to the vendored PHPStan extensions manifest. */
+const VENDORED_PHPSTAN_MANIFEST = fileURLToPath(new URL('../rules/vendored/phpstan/manifest.json', import.meta.url));
+
+/** Warn in `doctor` when the vendored assets are older than this (days). */
 const RULESET_STALE_DAYS = 90;
 
 /**
- * How old the vendored PHP rulesets are (for the `doctor` staleness warning).
- * @returns {{ ageDays: number; pinnedSha: string } | null} null when absent.
+ * Read a vendored manifest and report its age + a caller-provided summary.
+ * @param {string} manifestPath
+ * @param {(manifest: Record<string, any>) => string} summarize
+ * @returns {{ ageDays: number; summary: string } | null} null when absent/unparseable.
  */
-function rulesetFreshness() {
-  if (!existsSync(VENDORED_MANIFEST)) return null;
+function vendoredFreshness(manifestPath, summarize) {
+  if (!existsSync(manifestPath)) return null;
   try {
-    const manifest = JSON.parse(readFileSync(VENDORED_MANIFEST, 'utf8'));
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
     const ts = Date.parse(String(manifest.vendoredAt ?? ''));
     if (!Number.isFinite(ts)) return null;
     return {
       ageDays: Math.floor((Date.now() - ts) / 86400000),
-      pinnedSha: String(manifest.pinnedSha ?? '').slice(0, 8),
+      summary: summarize(manifest),
     };
   } catch {
     return null;
@@ -503,13 +508,24 @@ export function doctor(options = {}) {
   }
   console.log('');
   const missing = results.filter((r) => r.status !== 'ok').length;
-  const freshness = rulesetFreshness();
-  if (freshness) {
-    const stale = freshness.ageDays > RULESET_STALE_DAYS;
-    const age = paint(stale ? '33' : '90', `${freshness.ageDays} days old`);
-    console.log(`  PHP rulesets: vendored @ ${freshness.pinnedSha}, ${age}`);
+  const rules = vendoredFreshness(VENDORED_MANIFEST, (m) => `@ ${String(m.pinnedSha ?? '').slice(0, 8)}`);
+  if (rules) {
+    const stale = rules.ageDays > RULESET_STALE_DAYS;
+    const age = paint(stale ? '33' : '90', `${rules.ageDays} days old`);
+    console.log(`  PHP rulesets: vendored ${rules.summary}, ${age}`);
     if (stale) {
       console.log(`    ${paint('33', 'consider refreshing: node scripts/vendor-php-rules.mjs')}`);
+    }
+  }
+  const phpstan = vendoredFreshness(VENDORED_PHPSTAN_MANIFEST, (m) =>
+    Object.entries(m.pinned ?? {}).map(([name, version]) => `${String(name).split('/')[1]}@${version}`).join(', '),
+  );
+  if (phpstan) {
+    const stale = phpstan.ageDays > RULESET_STALE_DAYS;
+    const age = paint(stale ? '33' : '90', `${phpstan.ageDays} days old`);
+    console.log(`  PHPStan extensions: vendored ${phpstan.summary}, ${age}`);
+    if (stale) {
+      console.log(`    ${paint('33', 'consider refreshing: node scripts/vendor-phpstan-extensions.mjs')}`);
     }
   }
   console.log(missing === 0 ? paint('32', 'All prerequisites satisfied.') : `${missing} tool(s) need attention — run \`vibe-check setup\`.`);
