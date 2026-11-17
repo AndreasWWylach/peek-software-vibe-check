@@ -70,6 +70,31 @@ export function isEnvFile(repoFile) {
   const base = repoFile.split(/[\\/]/).pop() ?? '';
   return base === '.env' || base.startsWith('.env.');
 }
+
+/** Path segments that mark a file as server-side config, not browser code. */
+const SECRET_CONFIG_DIR_RE = /(^|\/)(config|environments|secrets)\//;
+
+/** Extensions that are configuration files — the framework's credential home. */
+const SECRET_CONFIG_EXT_RE = /\.(ya?ml|neon|ini)$/;
+
+/** Basenames that are secret config by convention (parameters.yaml, database.yaml). */
+const SECRET_CONFIG_NAME_RE = /(^|\/)(parameters|database)(\.[\w.-]+)?$/;
+
+/**
+ * Is this repo-relative path a conventional secret-config file? Symfony/Pimcore
+ * stores credentials in `parameters.yaml` / `database.yaml` / `config/` by
+ * design — a secret there is flagged as an advisory, never scored as a defect.
+ * @param {string} repoFile
+ * @returns {boolean}
+ */
+export function isSecretConfigFile(repoFile) {
+  const normalized = repoFile.replace(/\\/g, '/').toLowerCase();
+  return (
+    SECRET_CONFIG_DIR_RE.test(normalized) ||
+    SECRET_CONFIG_EXT_RE.test(normalized) ||
+    SECRET_CONFIG_NAME_RE.test(normalized)
+  );
+}
 /** File extensions that are data or docs, not source code (never "monolithic code", rarely client code). */
 export const NON_CODE_EXTS = new Set(['json', 'jsonl', 'md', 'csv', 'txt', 'lock']);
 

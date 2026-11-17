@@ -74,6 +74,42 @@ test('parseTrivyJson maps vulnerabilities to dependency findings + secrets to ad
   assert.ok(!JSON.stringify(secret).includes('sk_test_xxx'), 'secret value must not leak');
 });
 
+test('parseTrivyJson words config/env-file secrets as a committed-config advisory', () => {
+  const stdout = JSON.stringify({
+    Results: [
+      {
+        Target: '.env',
+        Class: 'secret',
+        Secrets: [
+          { RuleID: 'stripe-secret-token', Category: 'Stripe', Severity: 'CRITICAL', Title: 'Stripe Secret Key', StartLine: 34 },
+        ],
+      },
+      {
+        Target: 'backend/src/server.js',
+        Class: 'secret',
+        Secrets: [
+          { RuleID: 'generic-api-key', Category: 'Generic', Severity: 'HIGH', Title: 'Generic API Key', StartLine: 5 },
+        ],
+      },
+    ],
+  });
+
+  const findings = parseTrivyJson(stdout, '/repo');
+
+  const envSecret = findings.find((f) => f.file === '.env');
+  assert.ok(envSecret);
+  assert.equal(envSecret.title, 'Committed secret in config');
+  assert.match(envSecret.fixSummary ?? '', /stay(s)? private|private/i);
+  assert.equal(envSecret.advisory, true);
+  assert.equal(envSecret.kind, 'hygiene');
+
+  // A secret in ordinary code keeps the generic wording.
+  const codeSecret = findings.find((f) => f.file === 'backend/src/server.js');
+  assert.ok(codeSecret);
+  assert.equal(codeSecret.title, 'Generic API Key');
+  assert.equal(codeSecret.fixSummary, 'Remove the hardcoded secret; move it to a secrets manager and rotate it.');
+});
+
 test('trivy provider skips gracefully when the repo has no manifests', async () => {
   const root = mkdtempSync(join(tmpdir(), 'vibe-trivy-'));
   try {

@@ -23,7 +23,7 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
-import { IGNORED_DIRS, isIgnoredDir } from '../ignore.mjs';
+import { IGNORED_DIRS, isEnvFile, isIgnoredDir, isSecretConfigFile } from '../ignore.mjs';
 import { readLine, shouldSkipSecret } from '../secretClassify.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
@@ -170,7 +170,13 @@ function secretFinding(secret, file) {
     TRIVY_SEVERITY[String(secret.Severity ?? '').toUpperCase()] ?? 'medium'
   );
   const line = typeof secret.StartLine === 'number' ? /** @type {number} */ (secret.StartLine) : null;
-  const title = String(secret.Title ?? 'Hardcoded secret');
+
+  // A secret in a conventional config / env file (`.env`, `config/`,
+  // `parameters.yaml`, …) is the framework's documented placement — e.g. a
+  // single-source-of-truth repo that keeps live config in git (auto-deploy, no
+  // staging). Report it as an advisory that respects that choice, rather than
+  // a "remove the secret" lecture.
+  const configFile = isEnvFile(file) || isSecretConfigFile(file);
 
   return {
     id: `trivy:${ruleId}:${file}:${line ?? 0}`,
@@ -181,9 +187,11 @@ function secretFinding(secret, file) {
     severity,
     pillar: 'security',
     teardownId: null,
-    title,
+    title: configFile ? 'Committed secret in config' : String(secret.Title ?? 'Hardcoded secret'),
     message: `Trivy detected a ${String(secret.Category ?? 'potential')} secret (rule: ${ruleId}).`,
-    fixSummary: 'Remove the hardcoded secret; move it to a secrets manager and rotate it.',
+    fixSummary: configFile
+      ? 'Conventional secret placement — ensure the repo stays private (or gitignore this file) and rotate the value if the repo was ever public.'
+      : 'Remove the hardcoded secret; move it to a secrets manager and rotate it.',
     source: { provider: 'trivy', ruleId },
     dependency: null,
     // gitleaks is the scoring secret engine; trivy confirms (advisory).

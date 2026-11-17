@@ -15,7 +15,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
 import { lookupTeardown } from '../catalog.mjs';
-import { hasNonCodeExt, isEnvFile, isIgnoredDir, isVendoredPath } from '../ignore.mjs';
+import { hasNonCodeExt, isEnvFile, isIgnoredDir, isSecretConfigFile, isVendoredPath } from '../ignore.mjs';
 import { readLine, shouldSkipSecret } from '../secretClassify.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
@@ -49,31 +49,6 @@ function isFirebaseWebConfig(file) {
   } catch {
     return false;
   }
-}
-
-/** Path segments that mark a file as server-side config, not browser code. */
-const SECRET_CONFIG_DIR_RE = /(^|\/)(config|environments|secrets)\//;
-
-/** Extensions that are configuration files — the framework's credential home. */
-const SECRET_CONFIG_EXT_RE = /\.(ya?ml|neon|ini)$/;
-
-/** Basenames that are secret config by convention (parameters.yaml, database.yaml). */
-const SECRET_CONFIG_NAME_RE = /(^|\/)(parameters|database)(\.[\w.-]+)?$/;
-
-/**
- * Is this repo-relative path a conventional secret-config file? Symfony/Pimcore
- * stores credentials in `parameters.yaml` / `database.yaml` / `config/` by
- * design — a secret there is flagged as an advisory, never scored as a defect.
- * @param {string} repoFile
- * @returns {boolean}
- */
-export function isSecretConfigFile(repoFile) {
-  const normalized = repoFile.replace(/\\/g, '/').toLowerCase();
-  return (
-    SECRET_CONFIG_DIR_RE.test(normalized) ||
-    SECRET_CONFIG_EXT_RE.test(normalized) ||
-    SECRET_CONFIG_NAME_RE.test(normalized)
-  );
 }
 
 /** Paths that clearly run server-side (never shipped to the browser). */

@@ -16,7 +16,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseSemgrepJson } from '../src/providers/semgrep.mjs';
 import { collectRootLockfiles, parseOsvJson } from '../src/providers/osv.mjs';
-import { isSecretConfigFile } from '../src/providers/gitleaks.mjs';
+import { isSecretConfigFile } from '../src/ignore.mjs';
 import { isInertSecret, isPublicByDesignValue } from '../src/secretClassify.mjs';
 import { parseMadgeJson } from '../src/providers/madge.mjs';
 import { parseSccJson } from '../src/providers/scc.mjs';
