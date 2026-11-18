@@ -127,6 +127,15 @@
       "fixSummary": "Surface the error, or return a discriminated result ({ ok: false, message }) so a failure is never read as a successful zero/empty state.",
       "mappedQuestion": null,
       "languages": ["typescript", "javascript"]
+    },
+    {
+      "id": "TD-055",
+      "pillar": "runtime",
+      "severity": "low",
+      "points": null,
+      "fixSummary": "Check the signature header is present before verifying — answer \"not a delivery\" quietly, and fail loudly only when a present signature is wrong.",
+      "mappedQuestion": null,
+      "languages": ["typescript", "javascript"]
     }
   ]
 }

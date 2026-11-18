@@ -1,0 +1,48 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+rules:
+  - id: peek-td-055-webhook-signature-conflation-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: WARNING
+    message: A webhook handler verifies a signature header without first checking the header is present — a request with no header is treated as a failed signature.
+    metadata:
+      peek:
+        teardownId: TD-055
+        pillar: runtime
+        severity: low
+        title: Webhook signature conflation (absent vs invalid)
+        fixSummary: Check the signature header is present before verifying — answer "not a delivery" quietly, and fail loudly only when a present signature is wrong.
+      category: runtime
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $CTX(async ($REQ, $RES) => {
+                ...
+                $VERIFY($BODY, $REQ.headers[$HEADER], $SECRET)
+                ...
+              })
+          - pattern: |
+              $CTX($CONFIG, async ($REQ, $RES) => {
+                ...
+                $VERIFY($BODY, $REQ.headers[$HEADER], $SECRET)
+                ...
+              })
+      - pattern-not: |
+          $CTX(async ($REQ, $RES) => {
+            ...
+            if (!$GUARD($REQ.headers[$HEADER])) {
+              ...
+            }
+            ...
+          })
+      - pattern-not: |
+          $CTX($CONFIG, async ($REQ, $RES) => {
+            ...
+            if (!$GUARD($REQ.headers[$HEADER])) {
+              ...
+            }
+            ...
+          })
