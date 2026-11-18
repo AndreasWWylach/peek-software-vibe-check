@@ -197,6 +197,7 @@ function renderStack(stack) {
     parts.push(`Firebase (${firebaseBits.join(', ') || 'project'})`);
   }
   if (stack.prisma) parts.push('Prisma ORM');
+  if (stack.sql) parts.push('SQL migrations');
   if (stack.express) parts.push('Express');
 
   // PHP backends (composer.json markers). Pimcore is Symfony-based and always

@@ -168,6 +168,8 @@ function walk(dir, repoRoot, markers, rulesFiles, state) {
         markers.add('prisma');
       } else if (entry.name === 'firebase.json') {
         markers.add('firebase');
+      } else if (entry.name.toLowerCase().endsWith('.sql')) {
+        markers.add('sql');
       } else if (isSourceFile(entry.name)) {
         scanSource(abs, repoRoot, state);
       }

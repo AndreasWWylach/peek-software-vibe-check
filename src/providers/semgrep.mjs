@@ -260,13 +260,23 @@ export const semgrepProvider = {
         ctx.log(`  TD-008 tenant scope: ${explicitColumn} (from config)`);
       } else if (discovery?.descriptor) {
         const descriptor = discovery.descriptor;
-        ruleFiles = [
-          ...withoutGeneric,
-          materializeTenantRule(descriptor.scopeColumns, descriptor.scopedEntities, process.env.VIBE_CHECK_RULE_DIR),
-        ];
-        ctx.log(
-          `  TD-008 tenant scope: ${descriptor.tenantEntity} → ${descriptor.scopeColumns.join(', ')} (auto-detected; scoped ${descriptor.scopedEntities?.length ?? '?'} model(s))`,
-        );
+        if (discovery.dataLayer === 'sql') {
+          // Raw SQL is not yet checkable by the Prisma query rule — report the
+          // discovered tenant root honestly instead of pretending it was checked.
+          ruleFiles = withoutGeneric;
+          ctx.noteNotVerifiable?.('TD-008', 'Query without tenant scope', guidanceFor('sql-not-checkable', descriptor.tenantEntity));
+          ctx.log(
+            `  TD-008: SQL tenant root ${descriptor.tenantEntity} detected — raw-SQL scoping not yet auto-checkable`,
+          );
+        } else {
+          ruleFiles = [
+            ...withoutGeneric,
+            materializeTenantRule(descriptor.scopeColumns, descriptor.scopedEntities, process.env.VIBE_CHECK_RULE_DIR),
+          ];
+          ctx.log(
+            `  TD-008 tenant scope: ${descriptor.tenantEntity} → ${descriptor.scopeColumns.join(', ')} (auto-detected; scoped ${descriptor.scopedEntities?.length ?? '?'} model(s))`,
+          );
+        }
       } else {
         const reason = discovery?.notVerifiable ?? 'no-parseable-data-layer';
         ruleFiles = withoutGeneric;

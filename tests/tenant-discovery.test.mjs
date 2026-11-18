@@ -7,6 +7,9 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { parsePrismaSchema } from '../src/tenant/parsers/prisma.mjs';
 import { discoverTenant, guidanceFor } from '../src/tenant/discover.mjs';
 import { makeDescriptor } from '../src/tenant/descriptor.mjs';
@@ -101,4 +104,58 @@ test('discoverTenant reports no-parseable-data-layer without a data layer', () =
   );
   assert.deepEqual(result, { notVerifiable: 'no-parseable-data-layer' });
   assert.ok(guidanceFor('no-parseable-data-layer').length > 0);
+});
+
+/** Create a temp dir with one `.sql` migration, returning its path.
+ * @param {string} ddl */
+function sqlFixture(ddl) {
+  const dir = mkdtempSync(join(tmpdir(), 'vibe-check-sql-'));
+  writeFileSync(join(dir, '001_init.sql'), ddl, 'utf8');
+  return dir;
+}
+
+test('discoverTenant discovers the tenant from SQL migrations (dataLayer: sql)', () => {
+  const dir = sqlFixture(`
+CREATE TABLE clients (id BIGINT PRIMARY KEY);
+CREATE TABLE api_keys (
+  id BIGINT PRIMARY KEY,
+  client_id BIGINT REFERENCES clients(id)
+);
+CREATE TABLE request_logs (
+  id BIGINT PRIMARY KEY,
+  client_id BIGINT REFERENCES clients(id)
+);
+`);
+  try {
+    const result = discoverTenant(
+      /** @type {any} */ ({ repoRoot: dir, targets: [dir], stack: { sql: true } }),
+    );
+    assert.equal(result.dataLayer, 'sql');
+    assert.equal(result.descriptor?.tenantEntity, 'clients');
+    assert.deepEqual([...(result.descriptor?.scopeColumns ?? [])].sort(), ['client_id']);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('discoverTenant reports sql-no-tenant-entity when no aggregate root', () => {
+  const dir = sqlFixture(`
+CREATE TABLE clients (id BIGINT PRIMARY KEY);
+CREATE TABLE widgets (
+  id BIGINT PRIMARY KEY,
+  client_id BIGINT REFERENCES clients(id)
+);
+`);
+  try {
+    const result = discoverTenant(
+      /** @type {any} */ ({ repoRoot: dir, targets: [dir], stack: { sql: true } }),
+    );
+    assert.equal(result.notVerifiable, 'sql-no-tenant-entity');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('guidanceFor names the discovered SQL tenant', () => {
+  assert.ok(guidanceFor('sql-not-checkable', 'clients').includes('clients'));
 });
