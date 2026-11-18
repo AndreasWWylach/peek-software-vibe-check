@@ -4,13 +4,14 @@
 
 ## Read first
 
-- `docs/deep-scan-engine.md` — the complete design: vision, architecture, scoring model, rule catalog, implementation phases, and open decisions. Treat it as the single source of truth until code exists.
+- `docs/deep-scan-engine.md` — the complete design: vision, architecture, scoring model, rule catalog, implementation phases, and open decisions. The code now implements it; §9 tracks phase status, §5.4/§7 track what shipped.
 
 ## What it is
 
 - A Node.js CLI (`vibe-check`) that runs **entirely on the user's machine**, against their own source code. The user never uploads code to peek.software.
 - Peek only emits an **inert, declarative config** (`peek-config.json`) derived from the quiz + manifest intake. The config is data, never executed code.
-- Provider registry: Semgrep (custom teardown rules) + OSV-Scanner (dependency CVEs), later Gitleaks + one language-native linter.
+- Provider registry: Semgrep (custom teardown rules) + OSV-Scanner (CVEs) + Gitleaks (secrets) + Madge (circular deps) + scc (file size) + ESLint (linter), plus built-in providers (tests, dependency hygiene, security headers, CI, Firebase/Firestore rules) and optional Checkov / Hadolint / Trivy / Bandit / gosec / PHPStan.
+- Tenant isolation (TD-008) is sharpened by **automatic tenant-identity discovery** (`src/tenant/`): the Prisma schema or SQL migrations are parsed into a relation graph, the tenant aggregate root + scope columns are identified, and the rule is materialized (or reported "not statically verifiable" for layers the engine can't parse). Firestore apps get a rule/query cross-check (`src/firestore/scope.mjs`).
 
 ## Non-negotiable trust principles
 

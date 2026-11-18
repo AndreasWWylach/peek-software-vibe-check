@@ -2,7 +2,9 @@
 
 Open-source, local deep-scan engine for [peek.software](https://peek.software). It turns Peek's teardown catalog into an executable audit of your codebase — running **entirely on your machine, against your own source code**.
 
-> **Status:** Shipped — the engine scans real repos end-to-end with seventeen providers and ten+ teardown rules (all golden-tested). See `docs/deep-scan-engine.md` for the full design.
+> **⚠️ Early beta — under active development.** The scanner runs end-to-end and is golden-tested against real apps, but the rule catalog still covers a growing subset of the teardown catalog, and findings & scoring may still change as it is tuned against real codebases. Treat the report as a strong, specific signal to review — not a finished audit.
+
+> **Status:** Shipped — the engine scans real repos end-to-end with seventeen providers and thirteen teardown rules (all golden-tested), plus automatic tenant-identity discovery (Prisma schema + SQL migrations) and a Firestore rule/query cross-check. See `docs/deep-scan-engine.md` for the full design, or **[peek.software/scan](https://peek.software/scan)** for more about the scanner.
 
 ## Trust statement
 
@@ -144,6 +146,16 @@ rules/          custom Semgrep rules — teardown (peek/) + always-on hardening 
 examples/       sample app used by the integration test
 tests/          unit, parser, golden, and integration tests
 ```
+
+## Contributing
+
+The scanner is open (Apache-2.0) precisely so it can be sharpened in the open — contributions that make the scan quieter or catch one more real bug are the most valuable, and very welcome.
+
+- **Rules** — every teardown rule lives in `rules/peek/<TD-id>/` and must ship with a golden test under `tests/golden/fixtures/<td-id>/`: the TD's `vulnerableCode` must fire and its `hardenedCode` must stay silent.
+- **Providers** — one module per analysis capability in `src/providers/`; a missing binary degrades gracefully ("skipped"), never fails.
+- **Tenant discovery** — data-layer parsers live in `src/tenant/parsers/` and emit a shared `TenantDescriptor` (see `docs/deep-scan-engine.md` §5.4).
+
+Start from an issue or open a small, focused PR. `npm test` (and `npm run typecheck`) is the bar; the design lives in `docs/deep-scan-engine.md`, and `AGENTS.md` is the quick start.
 
 ## License
 
