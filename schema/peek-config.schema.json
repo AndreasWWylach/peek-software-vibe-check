@@ -50,6 +50,12 @@
           "type": "string",
           "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
           "description": "Tenant-scope column for TD-008 (e.g. organizationId)."
+        },
+        "agentLogPatterns": {
+          "type": "array",
+          "description": "Glob-like patterns for custom agent-workflow log files the scanner should watch (e.g. \"BUILD_RUN_*.md\"). Reported under Agent Provenance, never interpreted as a specific tool.",
+          "items": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "uniqueItems": true
         }
       }
     },

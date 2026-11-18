@@ -93,6 +93,10 @@ export function renderMarkdown(report) {
   lines.push('');
   lines.push(...renderStack(report.stack));
 
+  if (report.agentProvenance) {
+    lines.push(...renderAgentProvenance(report.agentProvenance));
+  }
+
   lines.push('## Findings Summary');
   lines.push('| Check | Findings | What |');
   lines.push('| --- | ---: | --- |');
@@ -230,6 +234,29 @@ function renderStack(stack) {
 
   if (parts.length === 0) return [];
   return ['## App Stack', `Detected: ${parts.join(' · ')}.`, ''];
+}
+
+/**
+ * Render the agent-provenance note — official AI-coding tool markers plus any
+ * user-named agent-workflow log files. Report-level context, never scored.
+ * @param {import('./types.mjs').AgentProvenance} provenance
+ * @returns {string[]}
+ */
+function renderAgentProvenance(provenance) {
+  /** @type {string[]} */
+  const lines = ['## Agent Provenance'];
+  if (provenance.signals.length > 0) {
+    lines.push('Official AI-coding tool markers detected:');
+    for (const signal of provenance.signals) lines.push(`- ${signal}`);
+  } else {
+    lines.push('_No official AI-coding tool markers detected._');
+  }
+  if (provenance.agentLogFiles.length > 0) {
+    lines.push('Agent-workflow log files you asked to watch:');
+    for (const file of provenance.agentLogFiles) lines.push(`- \`${file}\``);
+  }
+  lines.push('');
+  return lines;
 }
 
 /**

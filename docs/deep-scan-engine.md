@@ -612,6 +612,13 @@ Your dependencies carry **12 known CVE(s)**; the worst is critical `proxy-addr`
 ## App Stack
 Detected: Firebase (Firestore database, Cloud Functions) · React frontend · Stripe payments.
 
+## Agent Provenance
+Official AI-coding tool markers detected:
+- Claude Code (CLAUDE.md)
+- Claude Code (Co-Authored-By commit trailer)
+Agent-workflow log files you asked to watch:
+- `docs/BUILD_RUN_2026-11-16.md`
+
 ## Findings Summary
 | Check | Findings | What |
 | --- | ---: | --- |
@@ -683,6 +690,7 @@ it **never executes them** (running tests would break the offline principle):
 - ✅ **Tenant discovery (data-layer parsers, 2026-11-17).** Prisma relation-graph + SQL-migrations parsers (`src/tenant/`) produce a tenant descriptor (aggregate root + scope columns + scoped/global entities); TD-008 materializes a precise rule for Prisma and reports "not statically verifiable" (naming the tenant) for raw SQL. `ruleParams.tenantColumn` is the manual override.
 - ✅ **Firestore rule/query cross-check.** `firestore.rules` parsing (`src/firestore/scope.mjs`) + Firestore query cross-check → `rule-query-mismatch` finding (TD-008).
 - ✅ **Reelvenue-derived rule batch.** TD-052/054/055 shipped (golden-tested) + peek-software teardowns TD-052..TD-056; TD-053 folded into TD-008. See `docs/reelvenue-derived-work.md`.
+- ✅ **Agent-provenance detection (2026-11-17).** `src/agent-provenance.mjs` reports OFFICIAL AI-tool markers only — instruction/config files (`CLAUDE.md`, `.cursorrules`, `.cursor/rules`, `.github/copilot-instructions.md`, `.aider.conf.yml`, `AGENTS.md`) and Claude Code git commit trailers (`Co-Authored-By: Claude <noreply@anthropic.com>`, `Claude-Session:`). Project-specific workflow logs are NOT hard-coded — the user names them via `ruleParams.agentLogPatterns` (glob-like) and they are reported verbatim under "Agent Provenance".
 - ⬜ **Phase 5 — parameterized rules + full detectable catalog.**
 
 ---

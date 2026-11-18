@@ -33,7 +33,8 @@
       "items": { "$ref": "#/definitions/notVerifiable" }
     },
     "calibration": { "$ref": "#/definitions/calibration" },
-    "readiness": { "$ref": "#/definitions/readiness" }
+    "readiness": { "$ref": "#/definitions/readiness" },
+    "agentProvenance": { "$ref": "#/definitions/agentProvenance" }
   },
   "definitions": {
     "engineInfo": {
@@ -190,6 +191,23 @@
       "properties": {
         "status": { "enum": ["go", "conditional", "no-go"] },
         "conditions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "agentProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["signals", "agentLogFiles"],
+      "properties": {
+        "signals": {
+          "type": "array",
+          "description": "Official AI-coding tool markers (config files + git commit trailers).",
+          "items": { "type": "string" }
+        },
+        "agentLogFiles": {
+          "type": "array",
+          "description": "Repo-relative paths of custom agent-workflow log files named in ruleParams.agentLogPatterns.",
+          "items": { "type": "string" }
+        }
       }
     },
     "severity": { "enum": ["critical", "high", "medium", "low"] },

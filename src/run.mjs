@@ -34,6 +34,7 @@ import { phpstanProvider } from './providers/phpstan.mjs';
 import { isTestFile } from './ignore.mjs';
 import { discoverSourceDirs, skipCoveredDirs } from './discover.mjs';
 import { detectAppCheckOff, detectStack } from './stack.mjs';
+import { detectAgentProvenance } from './agent-provenance.mjs';
 import { corroborateFindings, dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
@@ -119,6 +120,17 @@ export async function run(configPath, options) {
     noteNotVerifiable: (teardownId, title, guidance) => notVerifiable.push({ teardownId, title, guidance }),
   };
 
+  // Agent provenance — official AI-coding tool markers + any custom agent-log
+  // files the user named in the config. Report-level context, never scored.
+  const agentProvenance = detectAgentProvenance({
+    repoRoot: options.repoRoot,
+    targets,
+    patterns: readAgentLogPatterns(config),
+  });
+  if (agentProvenance.signals.length > 0) {
+    log(`  agent provenance: ${agentProvenance.signals.join('; ')}`);
+  }
+
   const { findings, skipped } = await runProviders(
     [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider, depsProvider, headersProvider, ciProvider, checkovProvider, hadolintProvider, trivyProvider, banditProvider, gosecProvider, phpstanProvider],
     config,
@@ -187,6 +199,9 @@ export async function run(configPath, options) {
     stack,
     readiness,
     ...(calibration ? { calibration } : {}),
+    ...(agentProvenance.signals.length > 0 || agentProvenance.agentLogFiles.length > 0
+      ? { agentProvenance }
+      : {}),
   });
 
   // Self-check: the engine's own output must satisfy the published contract.
@@ -203,6 +218,22 @@ export async function run(configPath, options) {
   log(`wrote peek-report.json + AUDIT-REPORT.md`);
 
   return report;
+}
+
+/**
+ * Read `ruleParams.agentLogPatterns` from the config — glob-like patterns for
+ * custom agent-workflow log files (e.g. `BUILD_RUN_*.md`) the user asked the
+ * scanner to watch. Validated to plain, bounded strings.
+ * @param {import('./types.mjs').ScanConfig} config
+ * @returns {string[]}
+ */
+function readAgentLogPatterns(config) {
+  const raw = config.ruleParams?.agentLogPatterns;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((value) => typeof value === 'string')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0 && value.length <= 200);
 }
 
 /**

@@ -158,6 +158,16 @@
  * @property {'go' | 'conditional' | 'no-go'} status
  * @property {string[]} conditions — human-readable launch conditions.
  */
+
+/**
+ * Agent provenance — official AI-coding tool markers plus user-named agent-log
+ * files. Context for interpreting findings, never scored.
+ * @typedef {Object} AgentProvenance
+ * @property {string[]} signals — human-readable official markers
+ *   (e.g. "Claude Code (CLAUDE.md)").
+ * @property {string[]} agentLogFiles — repo-relative paths of the custom
+ *   agent-workflow log files named in `ruleParams.agentLogPatterns`.
+ */
 /**
  * The complete audit report object (mirrors peek-report.schema.json).
  * @typedef {Object} Report
@@ -174,6 +184,7 @@
  * @property {Calibration | undefined} calibration — self-report vs scan (when quiz data present).
  * @property {Readiness | undefined} [readiness] - go-live verdict (go / conditional / no-go).
  * @property {Record<string, boolean> | undefined} [stack] - scan-time stack markers (Firebase/Firestore/Prisma/…).
+ * @property {AgentProvenance | undefined} [agentProvenance] - AI-coding tool markers + user-named agent-log files.
  */
 
 export {};
