@@ -111,7 +111,13 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │   ├── catalog.mjs            # vendored teardown facts lookup
 │   ├── ignore.mjs             # shared path filters (junk dirs, env, test files)
 │   ├── discover.mjs           # source-directory discovery (auto-include targets)
-│   ├── stack.mjs              # scan-time stack markers (Firebase/Firestore/Prisma/…)
+│   ├── stack.mjs              # scan-time stack markers (Firebase/Firestore/Prisma/SQL/…)
+│   ├── tenant/                # tenant-identity discovery (TD-008 sharpening)
+│   │   ├── descriptor.mjs     #   language/ORM-neutral tenant contract
+│   │   ├── discover.mjs       #   dispatch (Prisma → SQL → not-verifiable)
+│   │   └── parsers/           #   prisma.mjs (relation graph) · sql.mjs (FK graph)
+│   ├── firestore/             # Firestore rules parsing + query cross-check
+│   │   └── scope.mjs          #   match-path → required fields → query mismatch
 │   ├── version.mjs            # engine name/version/commit
 │   ├── onboarding.mjs         # `vibe-check setup` installer logic
 │   └── providers/             # one module per analysis capability
@@ -216,10 +222,30 @@ config ──▶ validate
         ──▶ render AUDIT-REPORT.md + peek-report.json
 ```
 
-TD-008 tenant sharpening is automatic: the engine reads the scanned
-schema/model files, detects the tenant column(s) (`organizationId`,
-`workspaceId`, `tenant_id`, …), and materializes a precise rule. The intake
-never asks for the column name — a fact only the user's code knows.
+TD-008 tenant sharpening is automatic. The engine detects the tenant identity
+from the app's data layer (`src/tenant/`), never from the intake:
+
+- **Prisma** — `schema.prisma` is parsed into a model relation graph; the tenant
+  is the **aggregate root** (a model referenced by ≥2 others and referencing
+  none — e.g. `Client` referenced via `clientId`). The materialized rule then
+  checks only the tenant-scoped models with exactly the discovered column(s),
+  so a deliberately global model (a shared catalog) is never flagged.
+- **SQL migrations** — `CREATE TABLE … FOREIGN KEY … REFERENCES` (table- and
+  column-level) builds the same relation graph. The tenant table + column are
+  detected, but raw-SQL query scoping is not yet auto-checkable, so it is
+  reported as **"not statically verifiable"** with the detected tenant named in
+  the guidance.
+- **Other data layers** (TypeORM, Mongoose, Sequelize, Drizzle, Pimcore data
+  objects) — reported as "no parseable data layer" with guidance.
+  `ruleParams.tenantColumn` is the manual override for these (and for any layer
+  where auto-detection is wrong).
+
+**Firestore rule/query cross-check** — for Firebase apps, `firestore.rules` is
+parsed (`src/firestore/scope.mjs`) and Firestore queries in source are checked
+against the rule-required fields (e.g. `ownerUid`); a query that doesn't
+constrain by them is a `rule-query-mismatch` finding (TD-008). The cross-check
+needs the rules and the client queries in one repo — when they're split across
+repos (as in a monorepo where rules live elsewhere), it is skipped honestly.
 
 **Scan-time stack detection** is automatic too: the engine reads `firebase.json`,
 `package.json` dependencies, and `*.rules` files to know what the app is built
@@ -489,10 +515,16 @@ A rule is a **`(TD × language)` matrix cell**, not one pattern. v1 coverage ord
 | TD-045 | `ts-ignore` / `any` escape hatch | TS only | — | — | architecture |
 | TD-046 | bare `except: pass` | — | Python only | — | runtime |
 
-> **Shipped beyond v1's 8:** TD-050 (unverified payment webhook, TS/Python) and
-> TD-051 (client-supplied entitlement, TS/PHP), plus the provider-driven TDs —
-> TD-016 (Gitleaks), TD-019 (scc), TD-021 (Madge), TD-017 (tests heuristic). The
-> "8 rules" table above is the original Semgrep matrix, not the current ceiling.
+> **Shipped beyond v1's 8:** TD-050 (unverified payment webhook, TS/Python),
+> TD-051 (client-supplied entitlement, TS/PHP), and the 2026-11-17
+> Reelvenue-derived rules — TD-052 (reactive read/write loop, TS/JS), TD-054
+> (silent failure into a falsy default, TS/JS), TD-055 (webhook signature
+> conflation, TS/JS) — plus the provider-driven TDs — TD-016 (Gitleaks),
+> TD-019 (scc), TD-021 (Madge), TD-017 (tests heuristic). The "8 rules" table
+> above is the original Semgrep matrix, not the current ceiling. TD-053
+> (Firestore rule/query mismatch) ships as part of TD-008's provider
+> cross-check, not as a standalone Semgrep rule. See
+> `docs/reelvenue-derived-work.md` for the full derivation.
 
 ### 7.2 Detectability split (full catalog, 40 TDs)
 
@@ -648,6 +680,9 @@ it **never executes them** (running tests would break the offline principle):
 - ✅ **Phase 2 — golden rulepack.** TD-002/008/016/032/033/042/045/046/050/051 across JS/TS/Python/PHP + the golden harness; `catalog/teardowns.json` vendored.
 - 🚧 **Phase 3 — config generator (peek.software).** Backend `deriveTargets` + `targets` param landed (uncommitted); the full quiz→config→scan flow still needs end-to-end testing and likely extension.
 - ✅ **Phase 4 — calibration overlay.** Engine-side `computeCalibration` + the report overlay render end-to-end (config `quiz` block → self-report vs. scan table + per-hotspot ⚠️/✅ moments). The peek.software backend passes the quiz block through verbatim (`generateScanConfig`), and its `totalScore`/`pillarBreakdown`/`hotspots` shape matches the engine's expectation — verified against the sample config.
+- ✅ **Tenant discovery (data-layer parsers, 2026-11-17).** Prisma relation-graph + SQL-migrations parsers (`src/tenant/`) produce a tenant descriptor (aggregate root + scope columns + scoped/global entities); TD-008 materializes a precise rule for Prisma and reports "not statically verifiable" (naming the tenant) for raw SQL. `ruleParams.tenantColumn` is the manual override.
+- ✅ **Firestore rule/query cross-check.** `firestore.rules` parsing (`src/firestore/scope.mjs`) + Firestore query cross-check → `rule-query-mismatch` finding (TD-008).
+- ✅ **Reelvenue-derived rule batch.** TD-052/054/055 shipped (golden-tested) + peek-software teardowns TD-052..TD-056; TD-053 folded into TD-008. See `docs/reelvenue-derived-work.md`.
 - ⬜ **Phase 5 — parameterized rules + full detectable catalog.**
 
 ---

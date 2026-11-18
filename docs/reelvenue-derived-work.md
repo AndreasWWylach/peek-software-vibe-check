@@ -9,6 +9,19 @@ missed. Detailed notes: `/memories/repo/reelvenue-scan-insights.md`.
 This page channels the findings into three workstreams. One finding may feed
 all three.
 
+## Status (2026-11-17)
+
+| Workstream | State |
+|---|---|
+| A1 — TD-052 reactive loop, TD-054 silent falsy, TD-055 webhook signature | ✅ Shipped (rules + golden fixtures + `catalog/teardowns.json`). TD-054 later tightened to the promise `.catch(() => falsy)` form only — the `catch { … return null; }` block form false-positived on peek.software's own code (a handler that *does* surface the error, and benign `JSON.parse` fallbacks). |
+| A1 — TD-053 rule/query mismatch | ✅ Shipped under **TD-008** via the Firestore provider cross-check (`src/firestore/scope.mjs` → `rule-query-mismatch`), not a standalone rule. |
+| A2 — enrich TD-048 (login-bounce / auth-session race) | ✅ Shipped in peek-software: TD-048 gained the sign-in bounce instance (`firebaseLogin.ts` → `sessionWait.ts`). |
+| B — teardowns TD-052..TD-056 | ✅ Written in peek-software (td-052/054/055/056); generator `TD_RULES` wired TD-052/054/055. |
+| C — case study update | ✅ Shipped in peek-software: UI-review pass section, login-bounce story, limitation lesson extended, TEARDOWNS list +4. |
+
+The 6 defect classes map to: TD-052, TD-053 (→TD-008), TD-054, TD-055, TD-056
+(educational, no static rule), TD-048 (enrichment).
+
 ---
 
 ## A. Scanner improvements (this repo)
