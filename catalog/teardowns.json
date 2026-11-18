@@ -109,6 +109,24 @@
       "fixSummary": "Derive the entitlement from the provider-verified subscription/plan and write that — never a billing tier, plan id, or price id the client sent.",
       "mappedQuestion": null,
       "languages": ["typescript", "javascript", "php"]
+    },
+    {
+      "id": "TD-052",
+      "pillar": "runtime",
+      "severity": "high",
+      "points": null,
+      "fixSummary": "Keep reactive listeners read-only: update UI state in place from the snapshot, and perform writes only from user actions (or guard the write so it cannot re-trigger the listener).",
+      "mappedQuestion": null,
+      "languages": ["typescript", "javascript"]
+    },
+    {
+      "id": "TD-054",
+      "pillar": "runtime",
+      "severity": "medium",
+      "points": null,
+      "fixSummary": "Surface the error, or return a discriminated result ({ ok: false, message }) so a failure is never read as a successful zero/empty state.",
+      "mappedQuestion": null,
+      "languages": ["typescript", "javascript"]
     }
   ]
 }

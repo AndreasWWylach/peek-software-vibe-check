@@ -1,0 +1,29 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+rules:
+  - id: peek-td-052-reactive-loop-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: WARNING
+    message: A Firestore listener writes back to the database — a reactive read/write loop.
+    metadata:
+      peek:
+        teardownId: TD-052
+        pillar: runtime
+        severity: high
+        title: Reactive read/write loop
+        fixSummary: Keep listeners read-only — update UI state in place from the snapshot, and perform writes only from user actions (or guard the write so it cannot re-trigger the listener).
+      category: runtime
+    patterns:
+      - pattern-inside: |
+          onSnapshot($REF, ($SNAP) => {
+            ...
+          })
+      - pattern-either:
+          - pattern: setDoc(...)
+          - pattern: updateDoc(...)
+          - pattern: addDoc(...)
+          - pattern: deleteDoc(...)
+          - pattern: writeBatch(...)

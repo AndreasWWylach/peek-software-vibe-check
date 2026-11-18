@@ -1,0 +1,36 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+rules:
+  - id: peek-td-054-silent-falsy-default-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: WARNING
+    message: An async failure is swallowed into a falsy default — the error never surfaces.
+    metadata:
+      peek:
+        teardownId: TD-054
+        pillar: runtime
+        severity: medium
+        title: Silent failure into a falsy default
+        fixSummary: Surface the error, or return a discriminated result (ok plus message) so a failure is never read as a successful zero/empty state.
+      category: runtime
+    patterns:
+      - pattern-either:
+          - pattern: $X.catch(() => null)
+          - pattern: $X.catch(() => 0)
+          - pattern: $X.catch(() => false)
+          - pattern: $X.catch(() => '')
+          - pattern: |
+              catch {
+                ...
+                return null;
+                ...
+              }
+          - pattern: |
+              catch ($ERR) {
+                ...
+                return null;
+                ...
+              }
