@@ -13,6 +13,7 @@
 import { existsSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { commandAvailable, runCommandCapture } from '../proc.mjs';
+import { isIgnoredDir, isVendoredPath } from '../ignore.mjs';
 import { lookupTeardown } from '../catalog.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
@@ -59,12 +60,9 @@ export const madgeProvider = {
       );
       // Madge reports paths relative to the target; re-anchor them to repoRoot.
       for (const cycle of parseMadgeJson(stdout)) {
-        cycles.add(
-          cycle
-            .map((file) => relative(ctx.repoRoot, resolve(target, file)))
-            .sort()
-            .join(' → '),
-        );
+        const anchored = cycle.map((file) => relative(ctx.repoRoot, resolve(target, file)));
+        if (isIgnoredCycle(anchored)) continue;
+        cycles.add(anchored.sort().join(' → '));
       }
     }
 
@@ -89,6 +87,18 @@ export function parseMadgeJson(stdout) {
     }
   }
   return result;
+}
+
+/**
+ * True when a cycle should be dropped — any file under an ignored directory
+ * (build output like `dist/`, `build/`) or a vendored path is not the app's
+ * own source. Mirrors the semgrep provider's post-scan finding filter, so a
+ * "cycle" inside a minified bundle never reaches the report.
+ * @param {string[]} repoFiles — repo-relative file paths in the cycle.
+ * @returns {boolean}
+ */
+export function isIgnoredCycle(repoFiles) {
+  return repoFiles.some((file) => isIgnoredDir(file) || isVendoredPath(file));
 }
 
 /**

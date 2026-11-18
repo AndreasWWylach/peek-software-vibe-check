@@ -18,7 +18,7 @@ import { parseSemgrepJson } from '../src/providers/semgrep.mjs';
 import { collectRepoLockfiles, parseOsvJson } from '../src/providers/osv.mjs';
 import { isSecretConfigFile } from '../src/ignore.mjs';
 import { isInertSecret, isPublicByDesignValue } from '../src/secretClassify.mjs';
-import { parseMadgeJson } from '../src/providers/madge.mjs';
+import { isIgnoredCycle, parseMadgeJson } from '../src/providers/madge.mjs';
 import { parseSccJson } from '../src/providers/scc.mjs';
 import { parseGitleaksJson } from '../src/providers/gitleaks.mjs';
 import { parseEslintJson } from '../src/providers/eslint.mjs';
@@ -210,6 +210,24 @@ test('madge: parses circular cycles into path arrays', () => {
 test('madge: ignores empty and self-referential cycles', () => {
   const output = JSON.stringify([['only.ts'], []]);
   assert.deepEqual(parseMadgeJson(output), []);
+});
+
+test('madge: drops cycles that live in ignored or vendored dirs', () => {
+  assert.equal(
+    isIgnoredCycle(['frontend/dist/assets/a.js', 'frontend/src/x.ts']),
+    true,
+    'a cycle touching build output is ignored',
+  );
+  assert.equal(
+    isIgnoredCycle(['frontend/src/a.ts', 'frontend/src/b.ts']),
+    false,
+    'a cycle in real source is kept',
+  );
+  assert.equal(
+    isIgnoredCycle(['public/bundles/editor.js', 'src/a.ts']),
+    true,
+    'a cycle touching a vendored asset is ignored',
+  );
 });
 
 test('scc: flattens per-language groups into per-file line counts', () => {
