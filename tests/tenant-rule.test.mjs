@@ -7,13 +7,12 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildTenantRuleYaml,
-  detectTenantColumns,
   materializeTenantRule,
   readTenantColumn,
   TENANT_COLUMN_RE,
@@ -65,33 +64,23 @@ test('buildTenantRuleYaml accepts multiple columns (auto-detected set)', () => {
   );
 });
 
-test('detectTenantColumns finds tenant columns and ignores user/client ids', () => {
-  const root = mkdtempSync(join(tmpdir(), 'vibe-check-tenant-detect-'));
-  try {
-    mkdirSync(join(root, 'prisma'), { recursive: true });
-    writeFileSync(
-      join(root, 'prisma', 'schema.prisma'),
-      'model Project {\n  id String @id\n  organizationId String\n  workspaceId String\n  userId String\n  clientId String\n}\n',
-    );
-    mkdirSync(join(root, 'src'), { recursive: true });
-    writeFileSync(join(root, 'src', 'auth.ts'), 'const tenantId = req.user.organizationId;');
-    const columns = detectTenantColumns(
-      /** @type {any} */ ({ repoRoot: root, targets: [root] }),
-    );
-    assert.ok(columns.includes('organizationId'));
-    assert.ok(columns.includes('workspaceId'));
-    assert.ok(columns.includes('tenantId'));
-    assert.ok(!columns.includes('userId'), 'userId is a user, not a tenant');
-    assert.ok(!columns.includes('clientId'), 'clientId is OAuth, not tenant scope');
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
+test('buildTenantRuleYaml enumerates scoped entities explicitly (global models excluded)', () => {
+  const yaml = buildTenantRuleYaml('clientId', ['ApiKey', 'RequestLog']);
+  // Prisma accessors are lowercase-first (RequestLog → requestLog).
+  assert.ok(yaml.includes("'$PRISMA.requestLog.findUnique"));
+  assert.ok(yaml.includes("'$PRISMA.apiKey.findUnique"));
+  assert.ok(yaml.includes("pattern-not: '$PRISMA.requestLog.$METHOD"));
+  // No generic $MODEL in scoped mode — global models can never match.
+  assert.ok(!yaml.includes('$PRISMA.$MODEL'));
+  // Unknown scope → generic $MODEL fallback.
+  const open = buildTenantRuleYaml('clientId');
+  assert.ok(open.includes('$PRISMA.$MODEL.findUnique'));
 });
 
 test('materializeTenantRule writes a readable rule file and returns its path', () => {
   const dir = mkdtempSync(join(tmpdir(), 'vibe-check-rule-test-'));
   try {
-    const file = materializeTenantRule('organizationId', dir);
+    const file = materializeTenantRule('organizationId', null, dir);
     assert.ok(existsSync(file));
     assert.ok(readFileSync(file, 'utf8').includes('organizationId'));
   } finally {
@@ -109,7 +98,7 @@ test(
     // wrapper (which mounts only the engine repo) can reach it. Native semgrep
     // (CI + real machines) reads it identically.
     const repoRulesTmp = fileURLToPath(new URL('./.tmp-tenant-rule', import.meta.url));
-    const rule = materializeTenantRule('organizationId', repoRulesTmp);
+    const rule = materializeTenantRule('organizationId', null, repoRulesTmp);
     const fixturesDir = fileURLToPath(new URL('./golden/fixtures/td-008', import.meta.url));
 
     try {
@@ -143,7 +132,7 @@ test(
     // Regression for a colon in the unquoted multi-column message producing
     // "Invalid YAML … mapping values are not allowed here".
     const repoRulesTmp = fileURLToPath(new URL('./.tmp-tenant-rule-multi', import.meta.url));
-    const rule = materializeTenantRule(['organizationId', 'workspaceId'], repoRulesTmp);
+    const rule = materializeTenantRule(['organizationId', 'workspaceId'], null, repoRulesTmp);
     const fixturesDir = fileURLToPath(new URL('./golden/fixtures/td-008', import.meta.url));
     try {
       const stdout = runCommand('semgrep', [
@@ -152,6 +141,34 @@ test(
       ]);
       const parsed = JSON.parse(stdout);
       assert.ok(Array.isArray(parsed.results), 'semgrep must parse the rule and return results');
+    } finally {
+      rmSync(repoRulesTmp, { recursive: true, force: true });
+    }
+  },
+);
+
+test(
+  'tenant rule restricted to scoped models ignores global entities',
+  { skip: semgrepAvailable ? false : 'semgrep not installed — tenant-rule test skipped' },
+  () => {
+    const repoRulesTmp = fileURLToPath(new URL('./.tmp-tenant-rule-scoped', import.meta.url));
+    const rule = materializeTenantRule('clientId', ['ApiKey', 'RequestLog'], repoRulesTmp);
+    const fixturesDir = fileURLToPath(new URL('./fixtures/tenant-scoped', import.meta.url));
+    try {
+      const stdout = runCommand('semgrep', [
+        '--config', rule, '--json',
+        join(fixturesDir, 'scoped.vulnerable.ts'),
+        join(fixturesDir, 'scoped.hardened.ts'),
+        join(fixturesDir, 'global.ts'),
+      ]);
+      const results = /** @type {Array<Record<string, any>>} */ (
+        Array.isArray(JSON.parse(stdout).results) ? JSON.parse(stdout).results : []
+      );
+      /** @param {string} name @returns {number} */
+      const count = (name) => results.filter((result) => String(result.path ?? '').endsWith(name)).length;
+      assert.ok(count('scoped.vulnerable.ts') > 0, 'unscoped scoped-model query must fire');
+      assert.equal(count('scoped.hardened.ts'), 0, 'scoped scoped-model query must stay silent');
+      assert.equal(count('global.ts'), 0, 'a global model query must never fire');
     } finally {
       rmSync(repoRulesTmp, { recursive: true, force: true });
     }

@@ -17,5 +17,5 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": ["bin", "src", "tests"],
-  "exclude": ["node_modules", "tests/golden/fixtures"]
+  "exclude": ["node_modules", "tests/golden/fixtures", "tests/fixtures"]
 }

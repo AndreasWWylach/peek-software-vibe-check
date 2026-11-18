@@ -122,6 +122,7 @@
  * @property {Record<string, boolean> | undefined} stack — detected framework/service markers.
  * @property {(line: string) => void} log — progress sink.
  * @property {(id: string, detail: string) => void} noteDisabled — record an opt-in check left disabled (not scored).
+ * @property {(teardownId: string, title: string, guidance: string) => void} noteNotVerifiable — record a TD that cannot be scored statically (guidance, never findings).
  */
 
 /**

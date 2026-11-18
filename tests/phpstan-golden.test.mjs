@@ -72,6 +72,7 @@ test('phpstan golden: vendored extension loads for a framework app without its o
       stack: { symfony: true },
       log: () => {},
       noteDisabled: () => {},
+      noteNotVerifiable: () => {},
     };
     const findings = await phpstanProvider.run(/** @type {any} */ ({}), /** @type {any} */ (ctx));
     const ids = findings.map((f) => f.source.ruleId);

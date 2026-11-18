@@ -107,6 +107,8 @@ export async function run(configPath, options) {
 
   /** @type {DisabledCheck[]} */
   const disabled = [];
+  /** @type {Array<{ teardownId: string, title: string, guidance: string }>} */
+  const notVerifiable = [];
   /** @type {RunContext} */
   const ctx = {
     repoRoot: options.repoRoot,
@@ -114,6 +116,7 @@ export async function run(configPath, options) {
     stack,
     log,
     noteDisabled: (id, detail) => disabled.push({ id, detail }),
+    noteNotVerifiable: (teardownId, title, guidance) => notVerifiable.push({ teardownId, title, guidance }),
   };
 
   const { findings, skipped } = await runProviders(
@@ -180,7 +183,7 @@ export async function run(configPath, options) {
     dependencies,
     skippedProviders: skipped,
     disabledChecks: disabled,
-    notStaticallyVerifiable: [],
+    notStaticallyVerifiable: notVerifiable,
     stack,
     readiness,
     ...(calibration ? { calibration } : {}),

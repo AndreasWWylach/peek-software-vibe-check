@@ -26,7 +26,8 @@ import { fileURLToPath } from 'node:url';
 import { commandAvailable, runCommand } from '../proc.mjs';
 import { enrichTeardowns } from '../catalog.mjs';
 import { isIgnoredDir, isVendoredPath } from '../ignore.mjs';
-import { materializeTenantRule, readTenantColumn, detectTenantColumns } from './tenant-rule.mjs';
+import { materializeTenantRule, readTenantColumn } from './tenant-rule.mjs';
+import { discoverTenant, guidanceFor } from '../tenant/discover.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').ScanConfig} ScanConfig */
@@ -241,26 +242,37 @@ export const semgrepProvider = {
     }
 
     // TD-008 tenant sharpening: use the config's explicit tenant column when
-    // present, else AUTO-DETECT the column(s) from the scanned schema/models.
-    // Never ask the user for a fact only their code knows (Firebase/Firestore
-    // has no SQL column at all — detection simply finds none and the generic
-    // rule stays). The config stays inert — only column names are read.
+    // present, else DISCOVER the tenant entity (aggregate root) from the app's
+    // data layer. The config stays inert — only column names are read.
     const hasGenericRule = ruleFiles.some((file) => file.endsWith(join('TD-008', 'typescript.yaml')));
-    const explicitColumn = readTenantColumn(config);
-    const tenantColumns = hasGenericRule
-      ? explicitColumn
-        ? [explicitColumn]
-        : detectTenantColumns(ctx)
-      : [];
-    if (tenantColumns.length > 0 && hasGenericRule) {
+    if (hasGenericRule) {
       const withoutGeneric = ruleFiles.filter(
         (file) => !file.endsWith(join('TD-008', 'typescript.yaml')),
       );
-      // `VIBE_CHECK_RULE_DIR` (optional) lets a host point the materialized
-      // rule at a path its semgrep can reach — e.g. a container mount that
-      // doesn't include /tmp. Defaults to the OS temp dir.
-      ruleFiles = [...withoutGeneric, materializeTenantRule(tenantColumns, process.env.VIBE_CHECK_RULE_DIR)];
-      ctx.log(`  TD-008 tenant scope: ${tenantColumns.join(', ')}${explicitColumn ? '' : ' (auto-detected)'}`);
+      const explicitColumn = readTenantColumn(config);
+      const discovery = explicitColumn ? null : discoverTenant(ctx);
+
+      if (explicitColumn) {
+        ruleFiles = [
+          ...withoutGeneric,
+          materializeTenantRule([explicitColumn], null, process.env.VIBE_CHECK_RULE_DIR),
+        ];
+        ctx.log(`  TD-008 tenant scope: ${explicitColumn} (from config)`);
+      } else if (discovery?.descriptor) {
+        const descriptor = discovery.descriptor;
+        ruleFiles = [
+          ...withoutGeneric,
+          materializeTenantRule(descriptor.scopeColumns, descriptor.scopedEntities, process.env.VIBE_CHECK_RULE_DIR),
+        ];
+        ctx.log(
+          `  TD-008 tenant scope: ${descriptor.tenantEntity} → ${descriptor.scopeColumns.join(', ')} (auto-detected; scoped ${descriptor.scopedEntities?.length ?? '?'} model(s))`,
+        );
+      } else {
+        const reason = discovery?.notVerifiable ?? 'no-parseable-data-layer';
+        ruleFiles = withoutGeneric;
+        ctx.noteNotVerifiable?.('TD-008', 'Query without tenant scope', guidanceFor(reason));
+        ctx.log(`  TD-008: ${reason} — reported as not statically verifiable`);
+      }
     }
 
     if (ruleFiles.length === 0 && hygieneFiles.length === 0 && vendoredFiles.length === 0) {

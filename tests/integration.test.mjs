@@ -14,7 +14,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -197,5 +197,46 @@ test(
       assert.equal(finding.pillar, 'qa');
       assert.equal(finding.teardownId, null);
     }
+  },
+);
+
+test(
+  'semgrep provider: TD-008 without a known tenant column is guidance, not a false-positive flood',
+  { skip: semgrepAvailable ? false : 'semgrep not installed — integration test skipped' },
+  async () => {
+    const repoRoot = await mkdtemp(join(tmpdir(), 'vibe-check-tenant-'));
+    await mkdir(join(repoRoot, 'src'), { recursive: true });
+    // A tenant column the auto-detector deliberately ignores (`client` is
+    // OAuth scope, not tenant scope) — so detection finds nothing.
+    await writeFile(
+      join(repoRoot, 'src', 'schema.prisma'),
+      'model Client { id String @id }\nmodel Widget { id String @id clientId String client Client @relation(fields: [clientId], references: [id]) }\n',
+    );
+    // A query that IS scoped to the tenant (clientId). The old generic rule
+    // would flag it as unscoped because clientId is not in its hardcoded list.
+    await writeFile(
+      join(repoRoot, 'src', 'queries.ts'),
+      "export async function getWidget(prisma: any, id: string, clientId: string) {\n  return prisma.widget.findUnique({ where: { id, clientId } });\n}\n",
+    );
+    await writeFile(
+      join(repoRoot, 'peek-config.json'),
+      JSON.stringify({
+        version: 1,
+        engine: '>=0.1.0',
+        targets: ['src'],
+        languages: ['typescript'],
+        enabledRules: ['TD-008'],
+      }),
+    );
+    const outDir = await mkdtemp(join(tmpdir(), 'vibe-check-'));
+    const report = /** @type {Report} */ (
+      await run(join(repoRoot, 'peek-config.json'), { repoRoot, outDir, quiet: true })
+    );
+    const td008 = report.findings.filter((finding) => finding.teardownId === 'TD-008');
+    assert.equal(td008.length, 0, 'TD-008 must not flood findings when the tenant column is unknown');
+    assert.ok(
+      report.notStaticallyVerifiable.some((item) => item.teardownId === 'TD-008'),
+      'expected TD-008 to be reported as not statically verifiable',
+    );
   },
 );
