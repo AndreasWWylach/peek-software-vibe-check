@@ -16,9 +16,11 @@
  * Gated on scan-time stack detection — never asks the user whether they use
  * Firebase.
  */
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { scanRepo } from '../stack.mjs';
+import { isIgnoredDir } from '../ignore.mjs';
+import { parseRulesScope, scanFirestoreQueries, matchScopeRule } from '../firestore/scope.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').Finding} Finding */
@@ -60,6 +62,11 @@ export const firebaseProvider = {
           findings.push(openRulesFinding(rulesFile, 'critical'));
         } else if (!requiresAuth(content)) {
           findings.push(noAuthFinding(rulesFile, 'high'));
+        }
+        // Query side: cross-check client reads against the rule-required scope
+        // (the rule/query mismatch that shipped as reelvenue's film-assets bug).
+        for (const mismatch of crossCheckQueries(ctx, content)) {
+          findings.push(ruleQueryMismatchFinding(mismatch));
         }
       }
     }
@@ -220,4 +227,89 @@ function readFileSafely(file) {
   } catch {
     return '';
   }
+}
+
+/** Client source extensions scanned for Firestore queries. */
+const CLIENT_EXTS = /\.(ts|tsx|js|mjs|cjs)$/i;
+
+/**
+ * Recursively collect client source files under a directory (skips ignored dirs).
+ * @param {string} dir
+ * @param {Set<string>} out — absolute paths, appended in place.
+ */
+function collectClientFiles(dir, out) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
+    const abs = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (isIgnoredDir(entry.name)) continue;
+      collectClientFiles(abs, out);
+    } else if (entry.isFile() && CLIENT_EXTS.test(entry.name)) {
+      out.add(abs);
+    }
+  }
+}
+
+/**
+ * Cross-check every client read query against the rule-required scope fields.
+ * @param {import('../types.mjs').RunContext} ctx
+ * @param {string} rulesText
+ * @returns {Array<{ file: string, pathKey: string, missing: string[], line: number }>}
+ */
+function crossCheckQueries(ctx, rulesText) {
+  const scope = parseRulesScope(rulesText);
+  if (scope.size === 0) return [];
+
+  /** @type {Set<string>} */
+  const files = new Set();
+  for (const target of ctx.targets) collectClientFiles(target, files);
+
+  /** @type {Array<{ file: string, pathKey: string, missing: string[], line: number }>} */
+  const mismatches = [];
+  for (const abs of files) {
+    const source = readFileSafely(abs);
+    if (!source) continue;
+    const repoFile = relative(ctx.repoRoot, abs).replace(/^[/\\]+/, '');
+    for (const query of scanFirestoreQueries(source)) {
+      if (!query.read) continue;
+      const rule = matchScopeRule(scope, query.pathKey);
+      if (!rule || !rule.requiresAuth || rule.required.size === 0) continue;
+      const missing = [...rule.required].filter((field) => !query.whereFields.has(field));
+      if (missing.length > 0) {
+        mismatches.push({ file: repoFile, pathKey: query.pathKey, missing, line: query.line });
+      }
+    }
+  }
+  return mismatches;
+}
+
+/**
+ * "Client query does not constrain by the rule-required scope field" finding.
+ * @param {{ file: string, pathKey: string, missing: string[], line: number }} mismatch
+ * @returns {Finding}
+ */
+function ruleQueryMismatchFinding(mismatch) {
+  const { file, pathKey, missing, line } = mismatch;
+  const fields = missing.join('`, `');
+  return {
+    id: `firebase:rule-query-mismatch:${file}:${pathKey}`,
+    kind: 'teardown',
+    file,
+    line,
+    column: null,
+    severity: 'high',
+    pillar: 'security',
+    teardownId: TEARDOWN_ID,
+    title: `Firestore query on \`${pathKey}\` misses the rule-required scope`,
+    message: `This read query on \`${pathKey}\` does not constrain by \`${fields}\`, which \`firestore.rules\` requires — the query fails permission checks (or would read across tenants if the rule were looser).`,
+    fixSummary: `Add \`where('${missing[0]}', '==', uid)\` to the query so it satisfies the rule, or route the read through an authenticated Cloud Function.`,
+    source: { provider: 'firebase', ruleId: 'rule-query-mismatch' },
+    dependency: null,
+  };
 }

@@ -11,6 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { firebaseProvider, isOpenRules, requiresAuth } from '../src/providers/firebase.mjs';
+import { parseRulesScope, scanFirestoreQueries, matchScopeRule } from '../src/firestore/scope.mjs';
 
 /** Run the provider against a temp repo whose content is built by `setup`.
  * @param {(root: string) => void} setup
@@ -131,4 +132,68 @@ test('firebase provider is silent for non-Firebase apps', async () => {
     writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { express: '^5' } }));
   });
   assert.equal(findings.length, 0);
+});
+
+test('parseRulesScope extracts per-path required fields and skips public reads', () => {
+  const scope = parseRulesScope(`
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function uid() { return request.auth.uid; }
+    function signedIn() { return request.auth != null; }
+    match /rvFilms/{filmId}/assets/{assetId} {
+      allow read: if signedIn() && resource.data.get('ownerUid', '') == uid();
+      allow write: if false;
+    }
+    match /rvScreenings/{screeningId} {
+      allow read: if resource.data.status == 'onSale';
+      allow write: if false;
+    }
+  }
+}
+`);
+  const assets = scope.get('rvFilms/assets');
+  assert.ok(assets, 'expected rvFilms/assets scope rule');
+  assert.equal(assets?.requiresAuth, true);
+  assert.ok(assets?.required.has('ownerUid'));
+  // rvScreenings has a public (no-auth) read → no blanket scope rule.
+  assert.equal(scope.has('rvScreenings'), false);
+});
+
+test('scanFirestoreQueries extracts path key, where fields, and read-ness', () => {
+  const queries = scanFirestoreQueries(
+    "onSnapshot(query(collection(getDb(), 'rvFilms', filmId, 'assets'), where('ownerUid', '==', uid)), cb);\n" +
+      "setDoc(doc(getDb(), 'rvFilms', filmId), data);",
+  );
+  assert.equal(queries.length, 1, 'writes are not read queries');
+  assert.equal(queries[0]?.pathKey, 'rvFilms/assets');
+  assert.equal(queries[0]?.whereFields.has('ownerUid'), true);
+  assert.equal(queries[0]?.read, true);
+});
+
+test('firebase provider flags a client query missing the rule-required scope', async () => {
+  const findings = await runFixture((root) => {
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(
+      join(root, 'firestore.rules'),
+      "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function uid() { return request.auth.uid; }\n    match /rvFilms/{filmId}/assets/{assetId} {\n      allow read: if resource.data.get('ownerUid', '') == uid();\n      allow write: if false;\n    }\n    match /rvScreenings/{screeningId} {\n      allow read: if resource.data.status == 'onSale';\n      allow write: if false;\n    }\n  }\n}\n",
+    );
+    writeFileSync(
+      join(root, 'src', 'queries.ts'),
+      "import { collection, getFirestore, onSnapshot, query, where } from 'firebase/firestore';\n" +
+        "const db = getFirestore();\n" +
+        "const filmId = 'x';\n" +
+        "// vulnerable: no ownerUid constraint (filmId is a dynamic arg, like real code)\n" +
+        "onSnapshot(query(collection(db, 'rvFilms', filmId, 'assets')), () => {});\n" +
+        "// hardened: constrained\n" +
+        "onSnapshot(query(collection(db, 'rvFilms', filmId, 'assets'), where('ownerUid', '==', 'u')), () => {});\n" +
+        "// public collection: no auth scope required\n" +
+        "onSnapshot(query(collection(db, 'rvScreenings')), () => {});\n",
+    );
+  });
+  const mismatches = findings.filter((finding) => finding.source.ruleId === 'rule-query-mismatch');
+  assert.equal(mismatches.length, 1, 'expected exactly one rule/query mismatch');
+  assert.equal(mismatches[0]?.teardownId, 'TD-008');
+  assert.equal(mismatches[0]?.severity, 'high');
+  assert.ok(String(mismatches[0]?.message).includes('ownerUid'));
 });
