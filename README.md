@@ -42,7 +42,22 @@ npm install
 node bin/vibe-check.mjs run --config /path/to/peek-config.json
 ```
 
-This writes `AUDIT-REPORT.md` (human) and `peek-report.json` (machine) into the current directory.
+This writes `AUDIT-REPORT.md` (human), `peek-report.json` (machine) and
+`FIX-PROMPTS.md` (copy-paste AI remediation prompts, one per finding group)
+into the current directory. Skip the prompts with `--no-fix-prompts`;
+regenerate them from an existing report with `vibe-check fix-prompts`.
+
+### Fix it with AI
+
+Every run also writes **`FIX-PROMPTS.md`**: one copy-paste remediation prompt
+per finding group, grounded in the actual finding's evidence (file, line,
+message) and its teardown's fixSummary — never generic advice. Paste each
+section into any AI coding agent that can edit files (Claude Code, Cursor,
+Codex, aider, OpenCode with DeepSeek). Each prompt ends with verification:
+re-run the scan and confirm the finding is gone — the fix is proven by the
+scanner, not claimed by the model. For Claude Code there is a bundled skill
+(`skills/vibe-check/`); `AI-FIX-GUIDE.md` is the harness-neutral version of the
+same workflow.
 
 ### Onboarding (installer)
 
@@ -73,6 +88,8 @@ bash setup.sh
 | --- | --- |
 | `vibe-check run --config <path>` | Run the scan against a `peek-config.json` |
 | `vibe-check run --config <path> [--out <dir>]` | Run the scan against a `peek-config.json` and write reports to `<dir>` |
+| `vibe-check run --config <path> --no-fix-prompts` | Run the scan without writing `FIX-PROMPTS.md` |
+| `vibe-check fix-prompts --report <path>` | Re-generate `FIX-PROMPTS.md` from an existing `peek-report.json` (no re-scan, offline) |
 | `vibe-check probe <url>` | Opt-in, read-only live check of a deployed site you own (bounded requests, private targets rejected) |
 | `vibe-check run --config <path> --quiet` | Suppress progress output |
 | `vibe-check doctor` | Read-only onboarding check |
@@ -144,6 +161,8 @@ src/            engine — config, scoring, providers, report
 schema/         published JSON Schema contracts (config + report)
 catalog/        vendored teardown facts snapshot
 rules/          custom Semgrep rules — teardown (peek/) + always-on hardening (hygiene/)
+skills/         Claude Code remediation skill (vibe-check)
+AI-FIX-GUIDE.md harness-neutral remediation workflow for any AI agent
 examples/       sample app used by the integration test
 tests/          unit, parser, golden, and integration tests
 ```

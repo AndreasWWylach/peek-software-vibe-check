@@ -87,6 +87,18 @@ test(
     assert.equal(json.riskScore.total, report.riskScore.total);
     const markdown = await readFile(join(outDir, 'AUDIT-REPORT.md'), 'utf8');
     assert.ok(markdown.includes('TD-016'), 'expected the Markdown report to mention TD-016');
+
+    // AI remediation companion: FIX-PROMPTS.md is written next to the report,
+    // the report's `remediation` block describes it, and the Markdown renders
+    // a Fix Prompts section.
+    assert.ok(report.remediation, 'expected the remediation block');
+    assert.equal(report.remediation?.promptsFile, 'FIX-PROMPTS.md');
+    assert.ok((report.remediation?.promptCount ?? 0) > 0, 'expected at least one prompt');
+    const fixPrompts = await readFile(join(outDir, 'FIX-PROMPTS.md'), 'utf8');
+    assert.ok(fixPrompts.includes('TD-016'), 'expected FIX-PROMPTS.md to mention TD-016');
+    assert.ok(fixPrompts.includes('## Checklist'), 'expected the prompt checklist');
+    assert.ok(fixPrompts.includes('vibe-check run --config'), 'expected re-run verification instructions');
+    assert.ok(markdown.includes('## Fix Prompts'), 'expected the Fix Prompts report section');
     // The calibration overlay renders: the self-report vs. scan table + the
     // per-hotspot moments (⚠️ = self-report contradicted, ✅ = not found).
     assert.ok(markdown.includes('## Self-Report vs. Scan'), 'expected the self-report vs. scan section');

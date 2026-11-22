@@ -34,9 +34,25 @@
     },
     "calibration": { "$ref": "#/definitions/calibration" },
     "readiness": { "$ref": "#/definitions/readiness" },
-    "agentProvenance": { "$ref": "#/definitions/agentProvenance" }
+    "agentProvenance": { "$ref": "#/definitions/agentProvenance" },
+    "remediation": {
+      "type": "object",
+      "description": "AI remediation companion — FIX-PROMPTS.md written next to this report.",
+      "$ref": "#/definitions/remediation"
+    }
   },
   "definitions": {
+    "remediation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["promptsFile", "promptCount"],
+      "properties": {
+        "promptsFile": { "type": "string" },
+        "promptCount": { "type": "integer", "minimum": 0 },
+        "generatedAt": { "type": "string" },
+        "note": { "type": "string" }
+      }
+    },
     "engineInfo": {
       "type": "object",
       "additionalProperties": false,

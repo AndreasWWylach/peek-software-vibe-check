@@ -65,7 +65,10 @@ here is written from scratch, per the no-copying rule):
 3. **Agent-consumable fix prompts + a Claude Code skill** — both small scanners
    ship one; ours can be richer because every finding carries a full teardown
    (`fixSummary` + hardened code link). Planned together with the
-   agent-provenance work.
+   agent-provenance work. SHIPPED 2026-11-22: `FIX-PROMPTS.md` per run +
+   `vibe-check fix-prompts` regeneration + `skills/vibe-check` Claude skill +
+   `AI-FIX-GUIDE.md` — generated from real findings (not hand-written
+   templates) and verified by a deterministic re-scan (see `docs/deep-scan-engine.md` §9).
 4. **Stack-aware onboarding** — install only the binaries the detected stack
    needs (skip phpstan for a JS-only repo, etc.).
 5. **Deliberately NOT adopting** — 2,200-rule mega-rulepacks (noise over

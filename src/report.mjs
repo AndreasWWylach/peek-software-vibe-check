@@ -152,6 +152,27 @@ export function renderMarkdown(report) {
     renderFindingBlocks(lines, advisories);
   }
 
+  if (report.remediation) {
+    lines.push('');
+    lines.push('## Fix Prompts');
+    const { promptsFile, promptCount } = report.remediation;
+    if (promptCount > 0) {
+      lines.push(
+        `\`${promptsFile}\` was written next to this report — ${promptCount} copy-paste remediation prompt(s), one per finding group.`,
+      );
+    } else {
+      lines.push(
+        `\`${promptsFile}\` was written next to this report — no actionable findings, nothing to fix.`,
+      );
+    }
+    lines.push(
+      'Paste each section into any AI coding agent that can edit files — Claude Code, Cursor, Codex, aider, OpenCode with DeepSeek — or use the bundled `skills/vibe-check` Claude Code skill.',
+    );
+    lines.push(
+      'Every prompt ends with verification: re-run the scan and confirm the finding is gone — the fix is proven by the scanner, not claimed by the model.',
+    );
+  }
+
   if (skippedProviders.length > 0) {
     lines.push('');
     lines.push('## Skipped Checks');

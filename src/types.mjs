@@ -169,6 +169,14 @@
  *   agent-workflow log files named in `ruleParams.agentLogPatterns`.
  */
 /**
+ * AI remediation companion — FIX-PROMPTS.md written next to the report.
+ * @typedef {Object} Remediation
+ * @property {string} promptsFile — file name of the generated prompts.
+ * @property {number} promptCount — number of copy-paste remediation groups.
+ * @property {string} [generatedAt] - ISO timestamp.
+ * @property {string} [note] - human-readable usage note.
+ */
+/**
  * The complete audit report object (mirrors peek-report.schema.json).
  * @typedef {Object} Report
  * @property {number} schemaVersion
@@ -185,6 +193,7 @@
  * @property {Readiness | undefined} [readiness] - go-live verdict (go / conditional / no-go).
  * @property {Record<string, boolean> | undefined} [stack] - scan-time stack markers (Firebase/Firestore/Prisma/…).
  * @property {AgentProvenance | undefined} [agentProvenance] - AI-coding tool markers + user-named agent-log files.
+ * @property {Remediation | undefined} [remediation] - FIX-PROMPTS.md companion written next to the report.
  */
 
 export {};

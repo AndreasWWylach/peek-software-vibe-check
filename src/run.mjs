@@ -36,6 +36,7 @@ import { isTestFile } from './ignore.mjs';
 import { discoverSourceDirs, skipCoveredDirs } from './discover.mjs';
 import { detectAppCheckOff, detectStack } from './stack.mjs';
 import { detectAgentProvenance } from './agent-provenance.mjs';
+import { renderFixPrompts } from './fix-prompts.mjs';
 import { corroborateFindings, dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
@@ -65,10 +66,11 @@ function hasCiAdvisory(findings, ruleId) {
 /**
  * Run the full audit: load config, run providers, dedupe, score, render, write.
  * @param {string} configPath — absolute path to `peek-config.json`.
- * @param {{ repoRoot: string; outDir: string; quiet: boolean }} options
+ * @param {{ repoRoot: string; outDir: string; quiet: boolean; fixPrompts?: boolean }} options
  * @returns {Promise<Report>} the generated report (also written to disk).
  */
 export async function run(configPath, options) {
+  const writeFixPrompts = options.fixPrompts !== false;
   const config = await loadConfig(configPath);
   const log = options.quiet
     ? /** @type {(line: string) => void} */ (() => {})
@@ -205,6 +207,22 @@ export async function run(configPath, options) {
       : {}),
   });
 
+  // AI remediation companion: one copy-paste prompt per finding group, written
+  // next to the report. Attached to the report BEFORE validation so the
+  // published contract describes the artifact too.
+  /** @type {string | null} */
+  let fixPromptsMarkdown = null;
+  if (writeFixPrompts) {
+    const rendered = renderFixPrompts(report);
+    fixPromptsMarkdown = rendered.markdown;
+    report.remediation = {
+      promptsFile: 'FIX-PROMPTS.md',
+      promptCount: rendered.count,
+      generatedAt: new Date().toISOString(),
+      note: 'One copy-paste remediation prompt per finding group, grounded in each teardown\'s fixSummary. Fix, re-run the scan, confirm the finding is gone.',
+    };
+  }
+
   // Self-check: the engine's own output must satisfy the published contract.
   const reportErrors = validate(createValidator(), await loadSchema(REPORT_SCHEMA_PATH), report);
   if (reportErrors.length > 0) {
@@ -214,9 +232,12 @@ export async function run(configPath, options) {
   await mkdir(options.outDir, { recursive: true });
   await writeFile(resolve(options.outDir, 'peek-report.json'), JSON.stringify(report, null, 2) + '\n', 'utf8');
   await writeFile(resolve(options.outDir, 'AUDIT-REPORT.md'), renderMarkdown(report), 'utf8');
+  if (fixPromptsMarkdown !== null) {
+    await writeFile(resolve(options.outDir, 'FIX-PROMPTS.md'), fixPromptsMarkdown, 'utf8');
+  }
 
   log(`risk score: ${total} / ${MAX_TOTAL_SCORE} (${tier})`);
-  log(`wrote peek-report.json + AUDIT-REPORT.md`);
+  log(writeFixPrompts ? 'wrote peek-report.json + AUDIT-REPORT.md + FIX-PROMPTS.md' : 'wrote peek-report.json + AUDIT-REPORT.md');
 
   return report;
 }
