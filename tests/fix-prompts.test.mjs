@@ -74,6 +74,7 @@ test('groupRemediationFindings collapses dependency CVEs into one group', () => 
   assert.ok(dep);
   assert.equal(dep.packages.length, 2);
   assert.equal(dep.severity, 'critical'); // highest wins
+  assert.equal(dep.title, 'Upgrade dependencies with known CVEs'); // not the first CVE's title
   // Severity ordering: critical dependency group first.
   assert.equal(groups[0].kind, 'dependency');
 });

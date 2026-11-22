@@ -109,13 +109,16 @@ function remediationKey(finding) {
  * @returns {RemediationGroup}
  */
 function emptyGroup(finding, key) {
+  const isDependency = finding.kind === 'dependency';
   return {
     kind: finding.kind,
-    title: finding.title,
+    // One group holds EVERY dependency CVE — title it by the remediation, not
+    // by whichever CVE happened to sort first.
+    title: isDependency ? 'Upgrade dependencies with known CVEs' : finding.title,
     teardownId: finding.kind === 'teardown' ? finding.teardownId : null,
     ruleId: finding.kind === 'hygiene' ? (finding.source?.ruleId ?? key) : null,
-    message: finding.message,
-    fixSummary: finding.fixSummary,
+    message: isDependency ? null : finding.message,
+    fixSummary: isDependency ? null : finding.fixSummary,
     locations: [],
     packages: [],
     severity: finding.severity,
