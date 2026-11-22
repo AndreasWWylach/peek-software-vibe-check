@@ -41,6 +41,20 @@ vibe-check run --config peek-config.json
 This writes `AUDIT-REPORT.md` (human) and `peek-report.json` (machine). Every
 finding deep-links back to its teardown page on peek.software.
 
+## Live deployment check (optional)
+
+The code audit is static. To also check the **deployed** site — host/CDN
+security headers, exposed `.env`/`.git`, public source maps, debug endpoints —
+run:
+
+```bash
+vibe-check probe https://yourapp.com
+```
+
+Read-only GET/HEAD, bounded requests, and loopback/private targets are
+rejected. Only probe sites you own. Add `--json` for machine output or
+`--out <dir>` to write `probe-report.json`.
+
 ## Useful checks
 
 ```bash

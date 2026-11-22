@@ -12,7 +12,9 @@
  *   vibe-check --help
  */
 import { resolve } from 'node:path';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { run } from '../src/run.mjs';
+import { probeUrl } from '../src/probe.mjs';
 import { doctor, runOnboarding } from '../src/onboarding.mjs';
 import { ENGINE_NAME, ENGINE_VERSION } from '../src/version.mjs';
 
@@ -20,6 +22,7 @@ const HELP = `vibe-check — open-source, local deep-scan engine for peek.softwa
 
 Usage:
   vibe-check run --config <path> [--out <dir>] [--quiet]
+  vibe-check probe <url> [--json] [--out <dir>]
   vibe-check doctor [--no-color]
   vibe-check setup [--dry-run] [--yes] [--skip <tool>...] [--no-color]
   vibe-check --version
@@ -27,12 +30,14 @@ Usage:
 
 Commands:
   run          Run a scan against a peek-config.json.
+  probe        OPT-IN live check of a deployed URL you own (read-only, bounded).
   doctor       Read-only onboarding check — what's installed, missing, or outdated.
   setup        Interactive onboarding — install the missing tools, step by step.
 
 Options:
   --config <path>   Path to peek-config.json (required for run).
   --out <dir>       Directory for the reports (default: current directory).
+  --json            Machine-readable output (probe only).
   --quiet           Suppress progress output (run only).
   --dry-run         Print every planned install step without running anything.
   --yes             Accept all install steps without prompting.
@@ -41,7 +46,7 @@ Options:
   -v, --version     Print the engine version.
   -h, --help        Print this help.`;
 
-/** @typedef {{ command: 'help' } | { command: 'version' } | { command: 'run'; config: string; out: string | null; quiet: boolean } | { command: 'doctor'; color: boolean } | { command: 'setup'; yes: boolean; dryRun: boolean; skip: string[]; color: boolean }} ParsedArgs */
+/** @typedef {{ command: 'help' } | { command: 'version' } | { command: 'run'; config: string; out: string | null; quiet: boolean } | { command: 'probe'; target: string; json: boolean; out: string | null } | { command: 'doctor'; color: boolean } | { command: 'setup'; yes: boolean; dryRun: boolean; skip: string[]; color: boolean }} ParsedArgs */
 
 /**
  * Parse CLI arguments (minimal, dependency-free).
@@ -103,6 +108,23 @@ function parseArgs(argv) {
     return { command: 'run', config, out, quiet };
   }
 
+  if (command === 'probe') {
+    const target = argv[1];
+    if (!target || target.startsWith('--')) {
+      throw new Error('Missing required <url>. Run "vibe-check --help".');
+    }
+    /** @type {string | null} */
+    let out = null;
+    let json = false;
+    for (let i = 2; i < argv.length; i++) {
+      const arg = argv[i];
+      if (arg === '--out') out = argv[++i];
+      else if (arg === '--json') json = true;
+      else throw new Error(`Unknown flag "${arg}". Run "vibe-check --help".`);
+    }
+    return { command: 'probe', target, json, out };
+  }
+
   throw new Error(`Unknown command "${command}". Run "vibe-check --help".`);
 }
 
@@ -127,6 +149,24 @@ async function main() {
   }
   if (parsed.command === 'setup') {
     await runOnboarding({ yes: parsed.yes, dryRun: parsed.dryRun, skip: parsed.skip, color: parsed.color });
+    return;
+  }
+
+  if (parsed.command === 'probe') {
+    const report = await probeUrl(parsed.target, {
+      log: parsed.json ? /** @param {string} _line */ ((_line) => {}) : (line) => console.log(line),
+    });
+    if (parsed.out) {
+      await mkdir(parsed.out, { recursive: true });
+      await writeFile(resolve(parsed.out, 'probe-report.json'), JSON.stringify(report, null, 2) + '\n', 'utf8');
+      console.log(`wrote probe-report.json (${report.summary.pass} pass, ${report.summary.fail} fail, ${report.summary.warn} warn)`);
+    }
+    if (parsed.json) {
+      console.log(JSON.stringify(report, null, 2));
+    } else {
+      console.log(`summary: ${report.summary.pass} pass · ${report.summary.fail} fail · ${report.summary.warn} warn`);
+    }
+    if (report.summary.fail > 0) process.exitCode = 1;
     return;
   }
 

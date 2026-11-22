@@ -9,7 +9,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 ## Trust statement
 
 1. **Zero telemetry.** The engine never calls peek.software.
-2. **Offline & deterministic.** Only the OSV CVE lookup touches the network.
+2. **Offline & deterministic.** `run` never touches the network — only the OSV CVE lookup does, plus the separate, opt-in `probe <url>` command, which talks exclusively to the URL you provide.
 3. **Inert config.** `peek-config.json` is schema-validated data — never executed code.
 4. **Open & reviewable.** Apache-2.0. No hidden actions.
 
@@ -72,7 +72,8 @@ bash setup.sh
 | Command | Description |
 | --- | --- |
 | `vibe-check run --config <path>` | Run the scan against a `peek-config.json` |
-| `vibe-check run --config <path> --out <dir>` | Write reports to `<dir>` |
+| `vibe-check run --config <path> [--out <dir>]` | Run the scan against a `peek-config.json` and write reports to `<dir>` |
+| `vibe-check probe <url>` | Opt-in, read-only live check of a deployed site you own (bounded requests, private targets rejected) |
 | `vibe-check run --config <path> --quiet` | Suppress progress output |
 | `vibe-check doctor` | Read-only onboarding check |
 | `vibe-check setup` | Interactive onboarding (installs the tools) |
