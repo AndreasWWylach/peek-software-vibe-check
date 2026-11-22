@@ -57,6 +57,7 @@ const VENDORED_TD_MAP = /** @type {Array<{ re: RegExp; teardownId: string }>} */
     teardownId: 'TD-033', // SQL injection (mode: taint)
   },
   { re: /tainted-exec/i, teardownId: 'TD-042' }, // command injection (mode: taint)
+  { re: /tainted-url-host/i, teardownId: 'TD-057' }, // SSRF — user-controlled URL host (mode: taint)
 ]);
 
 /** Map Semgrep's severity strings to our shared severity enum (fallback only). */

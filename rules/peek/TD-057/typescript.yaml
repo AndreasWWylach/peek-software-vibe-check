@@ -1,0 +1,45 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-057 — Server-side request to a user-supplied URL (SSRF), JS/TS.
+#
+# The vulnerable shape: the server fetches a URL taken VERBATIM from the
+# request (`fetch(req.query.url)`, `axios.get(request.body.callbackUrl)`, …).
+# A client can point it at cloud metadata (169.254.169.254), internal
+# services, or localhost.
+#
+# Precision first, so the URL metavariable is ANCHORED to start with a request
+# accessor: `req.query.x` fires, while fetching one's OWN API with a route
+# param (`fetch(\`https://api.example.com/users/${req.params.id}\`)`) stays
+# silent — the host is a literal, not the request. A URL assembled on earlier
+# lines into a plain identifier is left to taint-mode tools; pattern mode
+# cannot prove how it was built.
+#
+# Severity is high (not critical): whether the sink is reachable and what the
+# server can reach from inside the network varies by deployment.
+rules:
+  - id: peek-td-057-user-url-fetch-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Server-side fetch of a request-supplied URL — a client can point it at cloud metadata, internal services, or localhost.
+    metadata:
+      peek:
+        teardownId: TD-057
+        pillar: security
+        severity: high
+        title: Server-side request to a user-supplied URL (SSRF)
+        fixSummary: Fetch only allowlisted, known-safe hosts — and for URLs that must stay user-controlled, force https and reject loopback/private/link-local/metadata destinations before fetching.
+      category: security
+    patterns:
+      - pattern-either:
+          # `($URL, ...)` — the ellipsis form matches calls of ANY arity; a
+          # bare `($URL)` matches only single-argument calls in this semgrep.
+          - pattern: 'fetch($URL, ...)'
+          - pattern: '$HTTP.get($URL, ...)'
+          - pattern: '$HTTP.post($URL, ...)'
+          - pattern: '$HTTP.request($URL, ...)'
+      - metavariable-regex:
+          metavariable: $URL
+          regex: '^(?:req|request)\.(?:query|body|params|cookies)'

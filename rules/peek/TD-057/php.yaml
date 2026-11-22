@@ -1,0 +1,46 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-057 — Server-side request to a user-supplied URL (SSRF), PHP.
+#
+# The vulnerable shape: the server fetches a URL taken from the request
+# superglobals (`file_get_contents($_GET['url'])`, `fopen($_POST['target'], …)`,
+# `curl_setopt($ch, CURLOPT_URL, $_REQUEST['url'])`). A client can point it at
+# cloud metadata (169.254.169.254), internal services, or localhost.
+#
+# The URL metavariable is anchored to START with a superglobal — a hardened
+# local path that merely appends request input
+# (`fopen('/tmp/upload-' . $_POST['name'], …)`) stays silent, because the
+# destination is a literal path, not the request. A URL assembled on earlier
+# lines into a plain variable is left to the vendored taint-mode rule
+# (`tainted-url-host`, mapped to TD-057 by the provider).
+#
+# Semgrep PHP pattern-mode requires full statements — each pattern carries
+# its terminating `;`.
+#
+# Severity is high (not critical): reachability and internal-network blast
+# radius vary by deployment.
+rules:
+  - id: peek-td-057-user-url-fetch-php
+    languages:
+      - php
+    severity: ERROR
+    message: Server-side fetch of a request-supplied URL — a client can point it at cloud metadata, internal services, or localhost.
+    metadata:
+      peek:
+        teardownId: TD-057
+        pillar: security
+        severity: high
+        title: Server-side request to a user-supplied URL (SSRF)
+        fixSummary: Fetch only allowlisted, known-safe hosts — and for URLs that must stay user-controlled, force https and reject loopback/private/link-local/metadata destinations before fetching.
+      category: security
+    patterns:
+      - pattern-either:
+          # `($URL, ...)` — the ellipsis form matches calls of ANY arity; a
+          # bare `($URL)` matches only single-argument calls in this semgrep.
+          - pattern: 'file_get_contents($URL, ...);'
+          - pattern: 'fopen($URL, ...);'
+          - pattern: 'curl_setopt($CH, CURLOPT_URL, $URL, ...);'
+      - metavariable-regex:
+          metavariable: $URL
+          regex: '^\$(?:_GET|_POST|_REQUEST)'

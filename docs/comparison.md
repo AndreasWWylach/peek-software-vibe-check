@@ -54,11 +54,14 @@ here is written from scratch, per the no-copying rule):
    vulnerabilities" is a useful checklist to cross our catalog against.
    Covered today: unprotected API routes (TD-032), committed secrets,
    IDOR (TD-008), frontend secrets (TD-016), SQLi (TD-033), XSS (hygiene),
-   unverified webhooks (TD-050), security headers, and RLS (shipped
-   2026-11-22 as the `rls` provider — migrations parsed, Postgres-gated).
-   Missing (Phase 5 priorities): SSRF (planned), CSRF, wildcard-CORS code
-   config, weak password hashing, insecure file uploads, debug-endpoint
-   exposure, rate-limit presence.
+   unverified webhooks (TD-050), security headers, RLS (shipped
+   2026-11-22 as the `rls` provider — migrations parsed, Postgres-gated),
+   and SSRF (shipped 2026-11-22 as TD-057 — direct request-to-fetch sinks
+   in TS/JS/Python/PHP + the vendored PHP `tainted-url-host` taint rule;
+   zero false positives across peek-software/lastmile/reelvenue/brixx).
+   Missing (Phase 5 priorities): CSRF, wildcard-CORS code config, weak
+   password hashing, insecure file uploads, debug-endpoint exposure,
+   rate-limit presence.
 3. **Agent-consumable fix prompts + a Claude Code skill** — both small scanners
    ship one; ours can be richer because every finding carries a full teardown
    (`fixSummary` + hardened code link). Planned together with the

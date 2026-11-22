@@ -534,10 +534,12 @@ A rule is a **`(TD × language)` matrix cell**, not one pattern. v1 coverage ord
 | TD-046 | bare `except: pass` | — | Python only | — | runtime |
 
 > **Shipped beyond v1's 8:** TD-050 (unverified payment webhook, TS/Python),
-> TD-051 (client-supplied entitlement, TS/PHP), and the 2026-11-17
+> TD-051 (client-supplied entitlement, TS/PHP), the 2026-11-17
 > Reelvenue-derived rules — TD-052 (reactive read/write loop, TS/JS), TD-054
 > (silent failure into a falsy default, TS/JS), TD-055 (webhook signature
-> conflation, TS/JS) — plus the provider-driven TDs — TD-016 (Gitleaks),
+> conflation, TS/JS) — and TD-057 (SSRF — server-side fetch of a
+> request-supplied URL, TS/JS + Python + PHP, 2026-11-22) — plus the
+> provider-driven TDs — TD-016 (Gitleaks),
 > TD-019 (scc), TD-021 (Madge), TD-017 (tests heuristic). The "8 rules" table
 > above is the original Semgrep matrix, not the current ceiling. TD-053
 > (Firestore rule/query mismatch) ships as part of TD-008's provider
@@ -713,6 +715,7 @@ it **never executes them** (running tests would break the offline principle):
 - ✅ **Tenant discovery (data-layer parsers, 2026-11-17).** Prisma relation-graph + SQL-migrations parsers (`src/tenant/`) produce a tenant descriptor (aggregate root + scope columns + scoped/global entities); TD-008 materializes a precise rule for Prisma and reports "not statically verifiable" (naming the tenant) for raw SQL. `ruleParams.tenantColumn` is the manual override.
 - ✅ **Firestore rule/query cross-check.** `firestore.rules` parsing (`src/firestore/scope.mjs`) + Firestore query cross-check → `rule-query-mismatch` finding (TD-008).
 - ✅ **PostgreSQL/Supabase RLS check (2026-11-22).** `src/providers/rls.mjs` parses SQL migrations and flags tables whose row-level security is never enabled (including the inert-policies case: `CREATE POLICY` without `ENABLE ROW LEVEL SECURITY`). Gated on `supabase`/`postgres` stack markers or Postgres-only DDL — MySQL repos can't trip it. Golden-style unit tests cover ENABLE/DISABLE/FORCE ordering, quoted policy names, and comment stripping.
+- ✅ **SSRF — TD-057 (2026-11-22).** Direct-sink Semgrep rules for TS/JS (`fetch`/`$HTTP.get|post|request`), Python (`requests`/`httpx`/`urllib`), and PHP (`file_get_contents`/`fopen`/`curl_setopt`) where the URL comes VERBATIM from the request (anchored metavariable-regex — fetching one's own API with a literal host stays silent). The vendored PHP taint rule `tainted-url-host` now maps to TD-057 too. Severity high (reachability varies by deployment). Validated on peek-software / lastmile / reelvenue / brixx: zero false positives.
 - ✅ **Reelvenue-derived rule batch.** TD-052/054/055 shipped (golden-tested) + peek-software teardowns TD-052..TD-056; TD-053 folded into TD-008. See `docs/reelvenue-derived-work.md`.
 - ✅ **Agent-provenance detection (2026-11-17).** `src/agent-provenance.mjs` reports OFFICIAL AI-tool markers only — instruction/config files (`CLAUDE.md`, `.cursorrules`, `.cursor/rules`, `.github/copilot-instructions.md`, `.aider.conf.yml`, `AGENTS.md`) and Claude Code git commit trailers (`Co-Authored-By: Claude <noreply@anthropic.com>`, `Claude-Session:`). Project-specific workflow logs are NOT hard-coded — the user names them via `ruleParams.agentLogPatterns` (glob-like) and they are reported verbatim under "Agent Provenance".
 - ✅ **Live deployment probe (2026-11-22).** Opt-in `vibe-check probe <url>` (`src/probe.mjs`) — read-only GET/HEAD with redirect cap + per-request timeout, loopback/private targets rejected. Checks final-HTTPS transport, deployed security headers, wildcard CORS, cookie flags, server disclosure (`X-Powered-By`), exposed `/.env`/`/.git/HEAD`, public source maps (SPA-fallback guard), and debug/docs endpoints. Reported separately from the offline code audit, never scored. Own implementation — ideas from competitor READMEs, see `docs/comparison.md`.

@@ -4,7 +4,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 
 > **⚠️ Early beta — under active development.** The scanner runs end-to-end and is golden-tested against real apps, but the rule catalog still covers a growing subset of the teardown catalog, and findings & scoring may still change as it is tuned against real codebases. Treat the report as a strong, specific signal to review — not a finished audit.
 
-> **Status:** Shipped — the engine scans real repos end-to-end with eighteen providers and thirteen teardown rules (all golden-tested), plus automatic tenant-identity discovery (Prisma schema + SQL migrations), a Firestore rule/query cross-check, and a PostgreSQL/Supabase row-level-security check. See `docs/deep-scan-engine.md` for the full design, or **[peek.software/scan](https://peek.software/scan)** for more about the scanner.
+> **Status:** Shipped — the engine scans real repos end-to-end with eighteen providers and fourteen teardown rules (all golden-tested), plus automatic tenant-identity discovery (Prisma schema + SQL migrations), a Firestore rule/query cross-check, and a PostgreSQL/Supabase row-level-security check. See `docs/deep-scan-engine.md` for the full design, or **[peek.software/scan](https://peek.software/scan)** for more about the scanner.
 
 ## Trust statement
 

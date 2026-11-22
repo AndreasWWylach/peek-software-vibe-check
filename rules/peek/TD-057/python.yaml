@@ -1,0 +1,46 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-057 — Server-side request to a user-supplied URL (SSRF), Python.
+#
+# The vulnerable shape: `requests.get(request.args.get('url'))` — the server
+# fetches a URL taken verbatim from the request. A client can point it at
+# cloud metadata (169.254.169.254), internal services, or localhost.
+#
+# The URL metavariable is anchored to start with a request accessor
+# (`request.args` / `request.form` / `request.json` / `request.values` /
+# `request.query_params` / `request.GET` / `request.POST`). Fetching one's OWN
+# API with an interpolated route param
+# (`requests.get(f"https://api.example.com/{request.args.get('id')}")`) stays
+# silent — the host is a literal, not the request. A URL built on earlier
+# lines into a plain identifier is left to taint-mode tools.
+#
+# Severity is high (not critical): reachability and internal-network blast
+# radius vary by deployment.
+rules:
+  - id: peek-td-057-user-url-fetch-python
+    languages:
+      - python
+    severity: ERROR
+    message: Server-side fetch of a request-supplied URL — a client can point it at cloud metadata, internal services, or localhost.
+    metadata:
+      peek:
+        teardownId: TD-057
+        pillar: security
+        severity: high
+        title: Server-side request to a user-supplied URL (SSRF)
+        fixSummary: Fetch only allowlisted, known-safe hosts — and for URLs that must stay user-controlled, force https and reject loopback/private/link-local/metadata destinations before fetching.
+      category: security
+    patterns:
+      - pattern-either:
+          # `($URL, ...)` — the ellipsis form matches calls of ANY arity; a
+          # bare `($URL)` matches only single-argument calls in this semgrep.
+          - pattern: 'requests.get($URL, ...)'
+          - pattern: 'requests.post($URL, ...)'
+          - pattern: 'requests.request($METHOD, $URL, ...)'
+          - pattern: 'httpx.get($URL, ...)'
+          - pattern: 'httpx.post($URL, ...)'
+          - pattern: 'urllib.request.urlopen($URL, ...)'
+      - metavariable-regex:
+          metavariable: $URL
+          regex: '^request\.(?:args|form|values|json|query_params|POST|GET)'
