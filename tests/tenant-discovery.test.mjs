@@ -11,6 +11,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parsePrismaSchema } from '../src/tenant/parsers/prisma.mjs';
+import { parseSqlMigrations } from '../src/tenant/parsers/sql.mjs';
 import { discoverTenant, guidanceFor } from '../src/tenant/discover.mjs';
 import { makeDescriptor } from '../src/tenant/descriptor.mjs';
 
@@ -154,6 +155,21 @@ CREATE TABLE widgets (
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('parseSqlMigrations uses the table name for schema-qualified CREATE TABLE', () => {
+  const descriptor = parseSqlMigrations([
+    {
+      name: '001.sql',
+      content: `
+CREATE TABLE public.clients (id BIGINT PRIMARY KEY);
+CREATE TABLE api_keys (id BIGINT PRIMARY KEY, client_id BIGINT REFERENCES clients(id));
+CREATE TABLE request_logs (id BIGINT PRIMARY KEY, client_id BIGINT REFERENCES clients(id));
+`,
+    },
+  ]);
+  assert.equal(descriptor?.tenantEntity, 'clients');
+  assert.deepEqual([...(descriptor?.scopeColumns ?? [])].sort(), ['client_id']);
 });
 
 test('guidanceFor names the discovered SQL tenant', () => {

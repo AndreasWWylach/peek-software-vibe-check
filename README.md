@@ -4,7 +4,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 
 > **⚠️ Early beta — under active development.** The scanner runs end-to-end and is golden-tested against real apps, but the rule catalog still covers a growing subset of the teardown catalog, and findings & scoring may still change as it is tuned against real codebases. Treat the report as a strong, specific signal to review — not a finished audit.
 
-> **Status:** Shipped — the engine scans real repos end-to-end with seventeen providers and thirteen teardown rules (all golden-tested), plus automatic tenant-identity discovery (Prisma schema + SQL migrations) and a Firestore rule/query cross-check. See `docs/deep-scan-engine.md` for the full design, or **[peek.software/scan](https://peek.software/scan)** for more about the scanner.
+> **Status:** Shipped — the engine scans real repos end-to-end with eighteen providers and thirteen teardown rules (all golden-tested), plus automatic tenant-identity discovery (Prisma schema + SQL migrations), a Firestore rule/query cross-check, and a PostgreSQL/Supabase row-level-security check. See `docs/deep-scan-engine.md` for the full design, or **[peek.software/scan](https://peek.software/scan)** for more about the scanner.
 
 ## Trust statement
 
@@ -29,7 +29,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [gosec](https://github.com/securego/gosec) — Go security SAST (optional, Go repos only)
 - [phpstan](https://phpstan.org) — PHP static analysis, hallucination checks (optional, PHP ≥ 8.1; composer-installed PHP apps)
 
-The **tests**, **dependency-hygiene**, **security-headers**, **CI** and **Firebase** providers are built into the engine — no binary to install. The **Semgrep PHP packs** (core + Laravel/Symfony/Doctrine/WordPress) are vendored into `rules/vendored/php/` (offline, pinned SHA) and selected automatically from `composer.json`. The **PHPStan framework extensions** (phpstan-symfony, phpstan-doctrine) are likewise vendored into `rules/vendored/phpstan/` — Symfony/Pimcore/Doctrine apps need only the `phpstan` PHAR, no Composer. **Laravel** is the one exception: `larastan` is *not* vendored (it boots the app's own Illuminate), so run `composer require --dev larastan/larastan` inside the Laravel app first.
+The **tests**, **dependency-hygiene**, **security-headers**, **CI**, **Firebase** and **PostgreSQL/Supabase RLS** providers are built into the engine — no binary to install. The **Semgrep PHP packs** (core + Laravel/Symfony/Doctrine/WordPress) are vendored into `rules/vendored/php/` (offline, pinned SHA) and selected automatically from `composer.json`. The **PHPStan framework extensions** (phpstan-symfony, phpstan-doctrine) are likewise vendored into `rules/vendored/phpstan/` — Symfony/Pimcore/Doctrine apps need only the `phpstan` PHAR, no Composer. **Laravel** is the one exception: `larastan` is *not* vendored (it boots the app's own Illuminate), so run `composer require --dev larastan/larastan` inside the Laravel app first.
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 

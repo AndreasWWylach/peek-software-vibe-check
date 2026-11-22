@@ -92,7 +92,7 @@ function findFile(ctx, basename) {
  * @param {(name: string) => boolean} matches
  * @returns {string[]} absolute paths.
  */
-function collectFiles(ctx, matches) {
+export function collectFiles(ctx, matches) {
   /** @type {string[]} */
   const found = [];
   for (const target of ctx.targets) {

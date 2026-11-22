@@ -12,7 +12,7 @@
  * and feed the report's App Stack summary.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { isAbsolute, join, relative } from 'node:path';
+import { basename, isAbsolute, join, relative } from 'node:path';
 import { IGNORED_DIRS, isTestFile } from './ignore.mjs';
 
 /** package.json dependency name → stack marker. */
@@ -32,6 +32,11 @@ const DEP_MARKERS = /** @type {Record<string, string>} */ (
     vite: 'vite',
     stripe: 'stripe',
     '@stripe/stripe-js': 'stripe',
+    // Postgres / Supabase markers gate the row-level-security check.
+    '@supabase/supabase-js': 'supabase',
+    '@supabase/ssr': 'supabase',
+    pg: 'postgres',
+    postgres: 'postgres',
   })
 );
 
@@ -166,6 +171,10 @@ function walk(dir, repoRoot, markers, rulesFiles, state) {
         recordFile(rulesFiles, entry.name, abs, repoRoot);
       } else if (entry.name === 'schema.prisma') {
         markers.add('prisma');
+      } else if (entry.name === 'config.toml' && basename(dir) === 'supabase') {
+        // `supabase/config.toml` — the canonical Supabase project marker, even
+        // when the JS SDK is not a dependency.
+        markers.add('supabase');
       } else if (entry.name === 'firebase.json') {
         markers.add('firebase');
       } else if (entry.name.toLowerCase().endsWith('.sql')) {

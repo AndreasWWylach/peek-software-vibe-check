@@ -16,7 +16,7 @@ import { makeDescriptor } from '../descriptor.mjs';
 /** @typedef {import('../descriptor.mjs').TenantDescriptor} TenantDescriptor */
 
 /** `CREATE TABLE [IF NOT EXISTS] [schema.]name (` — captures optional schema + table. */
-const CREATE_TABLE_RE =
+export const CREATE_TABLE_RE =
   /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?("?[A-Za-z_][A-Za-z0-9_]*"?)(?:\s*\.\s*("?[A-Za-z_][A-Za-z0-9_]*"?))?\s*\(/gi;
 
 /** Table-level FK: `[CONSTRAINT x] FOREIGN KEY (cols) REFERENCES [schema.]table(cols)`. */
@@ -32,11 +32,11 @@ const LEADING_COLUMN_RE = /^\s*("?[A-Za-z_][A-Za-z0-9_]*"?)/;
 
 /**
  * Strip SQL comments so a commented example table can't masquerade as a real one.
- * Handles `--`, MySQL `#`, and `/* … *​/`.
+ * Handles `--`, MySQL `#`, and block comments.
  * @param {string} sql
  * @returns {string}
  */
-function stripComments(sql) {
+export function stripComments(sql) {
   return sql
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/(^|[^#])#[^\n]*/gm, '$1')
@@ -124,7 +124,7 @@ function splitTopLevel(body) {
 }
 
 /** @param {string} name @returns {string} */
-const unquote = (name) => name.replace(/^["`]/, '').replace(/["`]$/, '');
+export const unquote = (name) => name.replace(/^["`]/, '').replace(/["`]$/, '');
 
 /** @param {string} raw @returns {string[]} */
 const splitIds = (raw) => splitTopLevel(raw).map(unquote);
@@ -150,7 +150,9 @@ export function parseSqlMigrations(files) {
     const createRe = new RegExp(CREATE_TABLE_RE.source, 'gi');
     let match;
     while ((match = createRe.exec(sql))) {
-      const table = unquote(match[1]);
+      // Group 2 is the table for `CREATE TABLE schema.table`; group 1 for the
+      // unqualified form `CREATE TABLE table`.
+      const table = unquote(match[2] ?? match[1]);
       const open = createRe.lastIndex - 1; // index of the opening `(`
       const close = matchParen(sql, open);
       if (close === -1) continue;

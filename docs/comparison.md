@@ -8,7 +8,7 @@ Because there are no independent third-party benchmark suites comparing these br
 | Feature / Metric | peek-software-vibe-check | [Vibeship Scanner](https://github.com/vibeforge1111/vibeship-scanner) | [Vibe Scanner](https://github.com/CyprianTinasheAarons/vibe-scanner) | [Vibe-Check](https://github.com/benavlabs/vibe-check) |
 |---|---|---|---|---|
 | Primary Approach | Deep local SAST + architecture & tenant audit | Broad SAST + AI fix prompt generator | Lightweight Next.js / Supabase repo + URL check | Live URL probe + AI agent rules/audit prompt |
-| Underlying Engines | Up to 17 providers (semgrep, osv-scanner, madge, scc, gitleaks, eslint, phpstan, bandit, gosec, etc.) | 4 tools (Opengrep, Trivy, Gitleaks, npm audit) | Pure Python custom checks (9 repo rules + URL checks) | Dependency-free Python live probe (check.py) + LLM prompts
+| Underlying Engines | Up to 18 providers (semgrep, osv-scanner, madge, scc, gitleaks, eslint, phpstan, bandit, gosec, etc.) | 4 tools (Opengrep, Trivy, Gitleaks, npm audit) | Pure Python custom checks (9 repo rules + URL checks) | Dependency-free Python live probe (check.py) + LLM prompts
 | Setup Weight | Heavy (requires Node ≥ 22 + up to 12 external CLI binaries) | Low (web UI via GitHub OAuth or self-hosted) | Very Low (standard Python 3.10+ package) | Minimal (copy markdown files / single Python script)
 | Code Privacy	100% local & offline (zero telemetry; only OSV CVE check uses network)| Web version requires repo access (public or GitHub OAuth) | 100% local read-only CLI / MCP server | 100% local / external HTTP probe |
 | Live URL Scanning | No (static source & config analysis only) | No (repo-only) | Yes (checks headers, CORS, exposed files) | Yes (checks headers, exposed .env/.git, source maps)
@@ -19,7 +19,7 @@ Maturity | Status	Early beta (0 stars; 13 golden-tested teardown rules) | Establ
 ### Where peek-software-vibe-check Outperforms the Others
 
 • Structural & Architectural Depth: The other three focus almost exclusively on security surface issues (leaked keys, missing auth checks, CORS). peek is the only one that checks codebase health and maintainability—using madge to catch circular dependencies, scc to flag AI-generated monolithic files, and phpstan/bandit/gosec to catch hallucinated methods or type errors.
-• Automated Tenant Isolation Discovery: While Vibe Scanner checks for missing Supabase Row-Level Security (RLS), peek actively parses your Prisma schemas and SQL migrations to discover tenant boundaries and cross-checks Firestore rules against actual queries.
+• Automated Tenant Isolation Discovery: While Vibe Scanner checks for missing Supabase Row-Level Security (RLS), peek actively parses your Prisma schemas and SQL migrations to discover tenant boundaries, cross-checks Firestore rules against actual queries, and now also flags Postgres/Supabase tables whose RLS is never enabled — including the silent killer where policies exist but `ENABLE ROW LEVEL SECURITY` never ran.
 • True Zero-Telemetry Offline Execution: Unlike Vibeship's hosted scanner (which requires granting GitHub OAuth for private repos), peek never touches an external server except to query the open-source OSV vulnerability database.
 
 ### Where the Other Scanners Outperform peek
@@ -54,10 +54,11 @@ here is written from scratch, per the no-copying rule):
    vulnerabilities" is a useful checklist to cross our catalog against.
    Covered today: unprotected API routes (TD-032), committed secrets,
    IDOR (TD-008), frontend secrets (TD-016), SQLi (TD-033), XSS (hygiene),
-   unverified webhooks (TD-050), security headers. Missing (Phase 5
-   priorities): RLS (planned), SSRF (planned), CSRF, wildcard-CORS code config,
-   weak password hashing, insecure file uploads, debug-endpoint exposure,
-   rate-limit presence.
+   unverified webhooks (TD-050), security headers, and RLS (shipped
+   2026-11-22 as the `rls` provider — migrations parsed, Postgres-gated).
+   Missing (Phase 5 priorities): SSRF (planned), CSRF, wildcard-CORS code
+   config, weak password hashing, insecure file uploads, debug-endpoint
+   exposure, rate-limit presence.
 3. **Agent-consumable fix prompts + a Claude Code skill** — both small scanners
    ship one; ours can be richer because every finding carries a full teardown
    (`fixSummary` + hardened code link). Planned together with the

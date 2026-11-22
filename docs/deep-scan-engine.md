@@ -137,7 +137,8 @@ Therefore "customized to the user's app" falls out for free: **activate a TD rul
 │       └── phpstan.mjs        # PHP static analysis / hallucination checks (phpstan, optional)
 │       ├── eslint.mjs         # language-linter hygiene (QA)
 │       ├── tests.mjs          # test presence + assertion heuristic (QA)
-│       └── firebase.mjs       # Firestore/Storage security-rules boundary (QA → security)
+│       ├── firebase.mjs       # Firestore/Storage security-rules boundary (QA → security)
+│       └── rls.mjs            # PostgreSQL/Supabase row-level-security boundary (security)
 ├── schema/
 │   ├── peek-config.schema.json   # config contract (JSON Schema, versioned)
 │   └── peek-report.schema.json   # report contract (JSON Schema, versioned)
@@ -216,6 +217,7 @@ config ──▶ validate
         │     phpstan (PHP static analysis, vendor/ gated)          ──▶ QA advisory findings
         │     ESLint (linter) · tests (presence/assertions)         ──▶ hygiene + QA findings
         │     Firebase/Firestore (security rules)                    ──▶ teardown findings
+        │     PostgreSQL/Supabase (row-level security)               ──▶ teardown findings
         ──▶ dedup (same teardownId + file/line collapses)
         ──▶ map findings → pillar → points (dependency CVEs + test-file findings excluded from score)
         ──▶ score (reuse quiz constants) + tier
@@ -246,6 +248,16 @@ against the rule-required fields (e.g. `ownerUid`); a query that doesn't
 constrain by them is a `rule-query-mismatch` finding (TD-008). The cross-check
 needs the rules and the client queries in one repo — when they're split across
 repos (as in a monorepo where rules live elsewhere), it is skipped honestly.
+
+**PostgreSQL/Supabase RLS check** — for Postgres apps the table-level boundary
+is row-level security, not an ORM `where` clause. `src/providers/rls.mjs` parses
+the SQL migrations and flags every `CREATE TABLE` whose RLS is never enabled
+(`ALTER TABLE … ENABLE ROW LEVEL SECURITY`, `FORCE` also counts, `DISABLE` after
+`ENABLE` wins). A table with `CREATE POLICY` statements but no `ENABLE` is the
+silent killer — the policies are inert — and is reported as critical. The check
+only fires when the repo proves it is Postgres: a `supabase`/`postgres` stack
+marker (SDK dependency or `supabase/config.toml`) or Postgres-only DDL in the
+migrations, so a MySQL-only repo can never trip it.
 
 **Scan-time stack detection** is automatic too: the engine reads `firebase.json`,
 `package.json` dependencies, and `*.rules` files to know what the app is built
@@ -332,6 +344,12 @@ detects Firebase/Firestore it checks the security-rules boundary — missing
 directly), open `if true` rules, rules that don't require `request.auth`, and a
 low-severity heuristic flagging Cloud Function `onCall`/`onRequest` handlers with
 no visible auth check.
+
+A pure-Node **`rls` provider** (no binary) gives Supabase/Postgres the same
+boundary check at the database layer: SQL migrations are parsed and every table
+whose row-level security is off is a TD-008 finding — critical when the Supabase
+JS client is a dependency (the browser can reach the database directly) or when
+policies exist but `ENABLE ROW LEVEL SECURITY` never ran, high otherwise.
 
 A pure-Node **`deps` provider** (no binary) reads the repo's package manifests
 (`package.json`, `composer.json`, `requirements.txt`, `Gemfile`, `Pipfile`,
@@ -694,6 +712,7 @@ it **never executes them** (running tests would break the offline principle):
 - ✅ **Phase 4 — calibration overlay.** Engine-side `computeCalibration` + the report overlay render end-to-end (config `quiz` block → self-report vs. scan table + per-hotspot ⚠️/✅ moments). The peek.software backend passes the quiz block through verbatim (`generateScanConfig`), and its `totalScore`/`pillarBreakdown`/`hotspots` shape matches the engine's expectation — verified against the sample config.
 - ✅ **Tenant discovery (data-layer parsers, 2026-11-17).** Prisma relation-graph + SQL-migrations parsers (`src/tenant/`) produce a tenant descriptor (aggregate root + scope columns + scoped/global entities); TD-008 materializes a precise rule for Prisma and reports "not statically verifiable" (naming the tenant) for raw SQL. `ruleParams.tenantColumn` is the manual override.
 - ✅ **Firestore rule/query cross-check.** `firestore.rules` parsing (`src/firestore/scope.mjs`) + Firestore query cross-check → `rule-query-mismatch` finding (TD-008).
+- ✅ **PostgreSQL/Supabase RLS check (2026-11-22).** `src/providers/rls.mjs` parses SQL migrations and flags tables whose row-level security is never enabled (including the inert-policies case: `CREATE POLICY` without `ENABLE ROW LEVEL SECURITY`). Gated on `supabase`/`postgres` stack markers or Postgres-only DDL — MySQL repos can't trip it. Golden-style unit tests cover ENABLE/DISABLE/FORCE ordering, quoted policy names, and comment stripping.
 - ✅ **Reelvenue-derived rule batch.** TD-052/054/055 shipped (golden-tested) + peek-software teardowns TD-052..TD-056; TD-053 folded into TD-008. See `docs/reelvenue-derived-work.md`.
 - ✅ **Agent-provenance detection (2026-11-17).** `src/agent-provenance.mjs` reports OFFICIAL AI-tool markers only — instruction/config files (`CLAUDE.md`, `.cursorrules`, `.cursor/rules`, `.github/copilot-instructions.md`, `.aider.conf.yml`, `AGENTS.md`) and Claude Code git commit trailers (`Co-Authored-By: Claude <noreply@anthropic.com>`, `Claude-Session:`). Project-specific workflow logs are NOT hard-coded — the user names them via `ruleParams.agentLogPatterns` (glob-like) and they are reported verbatim under "Agent Provenance".
 - ✅ **Live deployment probe (2026-11-22).** Opt-in `vibe-check probe <url>` (`src/probe.mjs`) — read-only GET/HEAD with redirect cap + per-request timeout, loopback/private targets rejected. Checks final-HTTPS transport, deployed security headers, wildcard CORS, cookie flags, server disclosure (`X-Powered-By`), exposed `/.env`/`/.git/HEAD`, public source maps (SPA-fallback guard), and debug/docs endpoints. Reported separately from the offline code audit, never scored. Own implementation — ideas from competitor READMEs, see `docs/comparison.md`.
