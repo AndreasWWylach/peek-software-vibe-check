@@ -23,6 +23,7 @@ import { eslintProvider } from './providers/eslint.mjs';
 import { testsProvider } from './providers/tests.mjs';
 import { firebaseProvider } from './providers/firebase.mjs';
 import { rlsProvider } from './providers/rls.mjs';
+import { csrfProvider } from './providers/csrf.mjs';
 import { depsProvider } from './providers/deps.mjs';
 import { headersProvider } from './providers/headers.mjs';
 import { ciProvider } from './providers/ci.mjs';
@@ -135,7 +136,7 @@ export async function run(configPath, options) {
   }
 
   const { findings, skipped } = await runProviders(
-    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider, rlsProvider, depsProvider, headersProvider, ciProvider, checkovProvider, hadolintProvider, trivyProvider, banditProvider, gosecProvider, phpstanProvider],
+    [semgrepProvider, osvProvider, madgeProvider, sccProvider, gitleaksProvider, eslintProvider, testsProvider, firebaseProvider, rlsProvider, csrfProvider, depsProvider, headersProvider, ciProvider, checkovProvider, hadolintProvider, trivyProvider, banditProvider, gosecProvider, phpstanProvider],
     config,
     ctx,
   );

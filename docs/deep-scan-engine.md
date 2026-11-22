@@ -368,6 +368,15 @@ absence of security-header configuration (CSP/HSTS/X-Frame-Options/`helmet`/
 `Talisman`) as an **advisory** — absence of evidence is a signal, not a defect,
 since headers may be set at a reverse proxy.
 
+A pure-Node **`csrf` provider** (no binary) applies the same honest advisory to
+CSRF, with one precision gate: it only fires when **cookie-based auth is
+DETECTED** (session libraries, next-auth, Supabase SSR, PHP `session_start`) and
+no protection evidence exists (token middleware/libs, token handling in code,
+or `SameSite`). Bearer-token apps are immune to classic CSRF and stay silent;
+Symfony/Laravel/Django/Pimcore and Flask-WTF count as built-in-protected —
+transitive `symfony/security-csrf` is found via `composer.lock`. Zero false
+positives across the six dev apps (5 token-auth + brixx builtin-protected).
+
 A pure-Node **`ci` provider** (no binary) reads the committed CI configs
 (`.github/workflows/*`, `.gitlab-ci.yml`, `Jenkinsfile`, …) and flags
 no-pipeline, no-tests, or no-coverage-gate as **advisories**.
@@ -720,6 +729,7 @@ it **never executes them** (running tests would break the offline principle):
 - ✅ **PostgreSQL/Supabase RLS check (2026-11-22).** `src/providers/rls.mjs` parses SQL migrations and flags tables whose row-level security is never enabled (including the inert-policies case: `CREATE POLICY` without `ENABLE ROW LEVEL SECURITY`). Gated on `supabase`/`postgres` stack markers or Postgres-only DDL — MySQL repos can't trip it. Golden-style unit tests cover ENABLE/DISABLE/FORCE ordering, quoted policy names, and comment stripping.
 - ✅ **SSRF — TD-057 (2026-11-22).** Direct-sink Semgrep rules for TS/JS (`fetch`/`$HTTP.get|post|request`), Python (`requests`/`httpx`/`urllib`), and PHP (`file_get_contents`/`fopen`/`curl_setopt`) where the URL comes VERBATIM from the request (anchored metavariable-regex — fetching one's own API with a literal host stays silent). The vendored PHP taint rule `tainted-url-host` now maps to TD-057 too. Severity high (reachability varies by deployment). Validated on peek-software / lastmile / reelvenue / brixx: zero false positives.
 - ✅ **AI remediation companion (2026-11-22).** `src/fix-prompts.mjs` + `vibe-check fix-prompts` — every run also writes `FIX-PROMPTS.md`, one evidence-grounded prompt per finding group (file:line + message + catalog fixSummary + teardown deep link), ending in verification: re-run the scan and confirm the finding is gone. The report gains a `remediation` block (schema-validated) and a "## Fix Prompts" section. Bundled `skills/vibe-check/SKILL.md` (Claude Code) + `AI-FIX-GUIDE.md` (any agent — incl. DeepSeek via aider/OpenCode) teach the closed loop, and prompts instruct agents to log `- [x] TD-xxx — fixed in <file>` in the team's run log — the seed of the structured cross-check below. Deliberately NOT adopted: hand-written per-vuln prompt templates (Vibeship) and prompt-only audits (benavlabs) — ours are generated from real findings and verified by a deterministic re-scan.
+- ✅ **CSRF advisory provider (2026-11-22).** `src/providers/csrf.mjs` — cookie-auth-gated absence-of-evidence advisory (see §5.7). Shipped the moment the gap-list item was honestly expressible: missing CSRF protection is a signal, not a deterministic defect, so it reports without scoring.
 - ✅ **Reelvenue-derived rule batch.** TD-052/054/055 shipped (golden-tested) + peek-software teardowns TD-052..TD-056; TD-053 folded into TD-008. See `docs/reelvenue-derived-work.md`.
 - ✅ **Agent-provenance detection (2026-11-17).** `src/agent-provenance.mjs` reports OFFICIAL AI-tool markers only — instruction/config files (`CLAUDE.md`, `.cursorrules`, `.cursor/rules`, `.github/copilot-instructions.md`, `.aider.conf.yml`, `AGENTS.md`) and Claude Code git commit trailers (`Co-Authored-By: Claude <noreply@anthropic.com>`, `Claude-Session:`). Project-specific workflow logs are NOT hard-coded — the user names them via `ruleParams.agentLogPatterns` (glob-like) and they are reported verbatim under "Agent Provenance".
 - ✅ **Live deployment probe (2026-11-22).** Opt-in `vibe-check probe <url>` (`src/probe.mjs`) — read-only GET/HEAD with redirect cap + per-request timeout, loopback/private targets rejected. Checks final-HTTPS transport, deployed security headers, wildcard CORS, cookie flags, server disclosure (`X-Powered-By`), exposed `/.env`/`/.git/HEAD`, public source maps (SPA-fallback guard), and debug/docs endpoints. Reported separately from the offline code audit, never scored. Own implementation — ideas from competitor READMEs, see `docs/comparison.md`.
