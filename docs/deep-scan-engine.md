@@ -533,6 +533,11 @@ A rule is a **`(TD × language)` matrix cell**, not one pattern. v1 coverage ord
 - **Partially detectable** — TD-017 (hallucinated tests) has a heuristic: the `tests` provider flags test files with no assertion calls (§8.1). TD-021 (pattern fragmentation) is approximated by Madge's circular-dependency graph.
 - **A third case — "detectable, but not in your language":** a TD may have a Semgrep variant for one language but not another (e.g. TD-046 only exists for Python). The report distinguishes "not detectable at all" from "not covered for your stack", so coverage gaps are honest, never silent zeros.
 
+For the role-based view — what each of the three LastMile roles (Auditor /
+Architect / Hardener) gets from the scanner, what's planned, and what is out of
+static reach (runtime behavior, ops, compliance) — see
+`docs/scanner-capabilities.md`.
+
 ### 7.3 Golden tests (the credibility gate)
 
 Every rule must pass a **golden test harness**:
@@ -691,6 +696,7 @@ it **never executes them** (running tests would break the offline principle):
 - ✅ **Firestore rule/query cross-check.** `firestore.rules` parsing (`src/firestore/scope.mjs`) + Firestore query cross-check → `rule-query-mismatch` finding (TD-008).
 - ✅ **Reelvenue-derived rule batch.** TD-052/054/055 shipped (golden-tested) + peek-software teardowns TD-052..TD-056; TD-053 folded into TD-008. See `docs/reelvenue-derived-work.md`.
 - ✅ **Agent-provenance detection (2026-11-17).** `src/agent-provenance.mjs` reports OFFICIAL AI-tool markers only — instruction/config files (`CLAUDE.md`, `.cursorrules`, `.cursor/rules`, `.github/copilot-instructions.md`, `.aider.conf.yml`, `AGENTS.md`) and Claude Code git commit trailers (`Co-Authored-By: Claude <noreply@anthropic.com>`, `Claude-Session:`). Project-specific workflow logs are NOT hard-coded — the user names them via `ruleParams.agentLogPatterns` (glob-like) and they are reported verbatim under "Agent Provenance".
+- ✅ **Live deployment probe (2026-11-22).** Opt-in `vibe-check probe <url>` (`src/probe.mjs`) — read-only GET/HEAD with redirect cap + per-request timeout, loopback/private targets rejected. Checks final-HTTPS transport, deployed security headers, wildcard CORS, cookie flags, server disclosure (`X-Powered-By`), exposed `/.env`/`/.git/HEAD`, public source maps (SPA-fallback guard), and debug/docs endpoints. Reported separately from the offline code audit, never scored. Own implementation — ideas from competitor READMEs, see `docs/comparison.md`.
 - ⬜ **Structured cross-checking (idea — pick up with the multi-agent-loop work).** Today the agent-workflow log files are provenance only. If a harness later emits its findings in a machine-readable shape (e.g. a checklist line `- [x] TD-052 — fixed in <file>`), the scanner could post-check each claim against the code — a self-report-vs-code calibration (the same overlay as §3 level 2, but fed by the agent's own structured notes instead of the quiz). Requires the harness to emit structured output; never inferred from free-form prose.
 - ⬜ **Phase 5 — parameterized rules + full detectable catalog.**
 
