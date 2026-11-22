@@ -1,0 +1,46 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-058 — Weak password hashing, JS/TS.
+#
+# The vulnerable shape: a password is hashed with a FAST, unsalted algorithm —
+# `crypto.createHash('md5' | 'sha1' | 'sha256').update(<password>)`. Those
+# algorithms are designed for speed (file checksums, signatures), which is
+# exactly what makes stored hashes crackable at billions of guesses/second.
+# Password storage needs a slow KDF: bcrypt, Argon2 or scrypt, each with its
+# own salt.
+#
+# Precision first: the algorithm AND the hashed value must both look like
+# password hashing — `createHash('sha256').update(fileBuffer)` (a checksum)
+# stays silent because the value metavariable is not a password-like name.
+rules:
+  - id: peek-td-058-weak-password-hash-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: Password hashed with a fast, unsalted algorithm — use bcrypt/Argon2/scrypt with a per-password salt.
+    metadata:
+      peek:
+        teardownId: TD-058
+        pillar: security
+        severity: high
+        title: Weak password hashing
+        fixSummary: Hash passwords with bcrypt, Argon2 or scrypt and a per-password salt — never MD5/SHA-1/unsalted SHA-256.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: '$CRYPTO.createHash($ALG).update($REQ.body.$PW, ...)'
+          - pattern: '$CRYPTO.createHash($ALG).update($REQ.query.$PW, ...)'
+          - pattern: '$CRYPTO.createHash($ALG).update($REQ.params.$PW, ...)'
+          - pattern: '$CRYPTO.createHash($ALG).update($PW, ...)'
+          - pattern: 'createHash($ALG, ...).update($REQ.body.$PW, ...)'
+          - pattern: 'createHash($ALG, ...).update($REQ.query.$PW, ...)'
+          - pattern: 'createHash($ALG, ...).update($REQ.params.$PW, ...)'
+          - pattern: 'createHash($ALG, ...).update($PW, ...)'
+      - metavariable-regex:
+          metavariable: $ALG
+          regex: "^(?:['\"])?(md5|sha1|sha256)(?:['\"])?$"
+      - metavariable-regex:
+          metavariable: $PW
+          regex: '^(password|passwd|pwd)$'

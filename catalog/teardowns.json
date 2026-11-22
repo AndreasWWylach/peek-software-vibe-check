@@ -145,6 +145,15 @@
       "fixSummary": "Fetch only allowlisted, known-safe hosts server-side — never pass a request-supplied URL straight to fetch/requests/file_get_contents — and for URLs that must stay user-controlled, force https and resolve/reject loopback, private-range, link-local and metadata (169.254.169.254) destinations before fetching.",
       "mappedQuestion": null,
       "languages": ["typescript", "javascript", "python", "php"]
+    },
+    {
+      "id": "TD-058",
+      "pillar": "security",
+      "severity": "high",
+      "points": null,
+      "fixSummary": "Hash passwords with bcrypt, Argon2 or scrypt and a per-password salt — never MD5, SHA-1 or unsalted SHA-256; they are designed to be fast, which is exactly what makes stored hashes crackable.",
+      "mappedQuestion": null,
+      "languages": ["typescript", "javascript", "python", "php"]
     }
   ]
 }

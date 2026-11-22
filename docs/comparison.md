@@ -61,10 +61,11 @@ here is written from scratch, per the no-copying rule):
    zero false positives across peek-software/lastmile/reelvenue/brixx),
    and CSRF (shipped 2026-11-22 as the `csrf` provider — advisory, gated on
    DETECTED cookie auth; token-auth apps are immune by default and stay
-   silent; Symfony/Laravel/Django/Flask-WTF built-ins recognized).
-   Missing (Phase 5 priorities): wildcard-CORS code config, weak password
-   hashing, insecure file uploads, debug-endpoint exposure, rate-limit
-   presence.
+   silent; Symfony/Laravel/Django/Flask-WTF built-ins recognized), and weak
+   password hashing (shipped 2026-11-22 as TD-058 — scored, golden-tested
+   across TS/JS/Python/PHP; zero false positives on the six dev apps).
+   Missing (Phase 5 priorities): wildcard-CORS code config, insecure file
+   uploads, debug-endpoint exposure, rate-limit presence.
 3. **Agent-consumable fix prompts + a Claude Code skill** — both small scanners
    ship one; ours can be richer because every finding carries a full teardown
    (`fixSummary` + hardened code link). Planned together with the

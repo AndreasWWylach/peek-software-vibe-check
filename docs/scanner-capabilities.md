@@ -23,7 +23,9 @@ three LastMile roles gets from the scanner, and what stays out of static reach.
 | Bullet | Coverage |
 |---|---|
 | Secrets in a vault | ✅ Gitleaks + Semgrep TD-016 + Trivy secrets — *committed* secrets only; what's actually in the vault is out of reach. |
-| Untrusted input sanitized | 🔶 TD-033 (SQL concatenation) + TD-042 (command injection) shipped; XSS (`dangerouslySetInnerHTML`) + open-redirect hygiene shipped; **SSRF not yet** (planned). |
+| Untrusted input sanitized | ✅ TD-033 (SQL concatenation), TD-042 (command injection), TD-057 (SSRF — direct request-to-fetch sinks); XSS (`dangerouslySetInnerHTML`) + open-redirect hygiene shipped. |
+| Passwords stored safely | ✅ TD-058 (weak password hashing — MD5/SHA-1/unsalted SHA-256 flags; bcrypt/Argon2/scrypt expected). |
+| CSRF protection | ✅ `csrf` provider — advisory, gated on DETECTED cookie auth (token-auth apps are immune and stay silent). |
 | Dependencies you can trust | ✅ OSV-Scanner CVEs + missing-lockfile (scored) + floating versions (advisory). |
 | Encrypted everywhere (headers) | ✅ Security-headers provider — CSP / HSTS / X-Frame-Options / X-Content-Type-Options / Referrer-Policy / Permissions-Policy (advisory; a reverse proxy may set them outside the repo). |
 | Auth can't be walked through | 🔶 TD-032 (unauthenticated handler) shipped; MFA/zero-trust is **config**, not code. |

@@ -1,0 +1,68 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-058 — Weak password hashing, PHP.
+#
+# The vulnerable shape: `md5($password)`, `sha1($pass)`, or
+# `hash('sha256', $pwd)`. Fast, unsalted hashes are crackable at billions of
+# guesses/second; password storage needs `password_hash()` with
+# PASSWORD_DEFAULT (bcrypt) — or Argon2 — which salts per password.
+#
+# Two rules because a `metavariable-regex` on an unbound metavariable is a
+# rule error: `md5($PW)`/`sha1($PW)` bind only `$PW`, while `hash($ALG, $PW)`
+# binds both.
+#
+# Semgrep PHP pattern-mode requires full statements — each pattern carries
+# its terminating `;`.
+rules:
+  - id: peek-td-058-weak-password-hash-php-md5-sha1
+    languages:
+      - php
+    severity: ERROR
+    message: Password hashed with a fast, unsalted algorithm — use password_hash()/Argon2 with a per-password salt.
+    metadata:
+      peek:
+        teardownId: TD-058
+        pillar: security
+        severity: high
+        title: Weak password hashing
+        fixSummary: Hash passwords with password_hash() (bcrypt/Argon2, salted per password) — never MD5/SHA-1/unsalted SHA-256.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'md5($_POST[$PW], ...);'
+          - pattern: 'md5($_GET[$PW], ...);'
+          - pattern: 'md5($_REQUEST[$PW], ...);'
+          - pattern: 'md5($PW, ...);'
+          - pattern: 'sha1($_POST[$PW], ...);'
+          - pattern: 'sha1($_GET[$PW], ...);'
+          - pattern: 'sha1($_REQUEST[$PW], ...);'
+          - pattern: 'sha1($PW, ...);'
+      - metavariable-regex:
+          metavariable: $PW
+          regex: "^\\$?(?:['\\\"])?(password|passwd|pwd)(?:['\\\"])?$"
+  - id: peek-td-058-weak-password-hash-php-hash
+    languages:
+      - php
+    severity: ERROR
+    message: Password hashed with a fast, unsalted algorithm — use password_hash()/Argon2 with a per-password salt.
+    metadata:
+      peek:
+        teardownId: TD-058
+        pillar: security
+        severity: high
+        title: Weak password hashing
+        fixSummary: Hash passwords with password_hash() (bcrypt/Argon2, salted per password) — never MD5/SHA-1/unsalted SHA-256.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'hash($ALG, $_POST[$PW], ...);'
+          - pattern: 'hash($ALG, $_GET[$PW], ...);'
+          - pattern: 'hash($ALG, $_REQUEST[$PW], ...);'
+          - pattern: 'hash($ALG, $PW, ...);'
+      - metavariable-regex:
+          metavariable: $ALG
+          regex: "^(?:['\\\"])?(md5|sha1|sha256)(?:['\\\"])?$"
+      - metavariable-regex:
+          metavariable: $PW
+          regex: "^\\$?(?:['\\\"])?(password|passwd|pwd)(?:['\\\"])?$"

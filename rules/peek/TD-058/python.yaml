@@ -1,0 +1,42 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-058 — Weak password hashing, Python.
+#
+# The vulnerable shape: `hashlib.md5/sha1/sha256(<password>)`. Fast, unsalted
+# hashes are crackable at billions of guesses/second; password storage needs a
+# slow KDF — bcrypt, Argon2 or scrypt — with a per-password salt.
+#
+# Precision first: the hashed value must look like a password
+# (`password`/`passwd`/`pwd`); `hashlib.sha256(file_data)` (a checksum) stays
+# silent.
+rules:
+  - id: peek-td-058-weak-password-hash-python
+    languages:
+      - python
+    severity: ERROR
+    message: Password hashed with a fast, unsalted algorithm — use bcrypt/Argon2/scrypt with a per-password salt.
+    metadata:
+      peek:
+        teardownId: TD-058
+        pillar: security
+        severity: high
+        title: Weak password hashing
+        fixSummary: Hash passwords with bcrypt, Argon2 or scrypt and a per-password salt — never MD5/SHA-1/unsalted SHA-256.
+      category: security
+    patterns:
+      - pattern-either:
+          - pattern: 'hashlib.$ALG($REQ.form[$PW], ...)'
+          - pattern: 'hashlib.$ALG($REQ.form[$PW].encode(), ...)'
+          - pattern: 'hashlib.$ALG($REQ.form.get($PW), ...)'
+          - pattern: 'hashlib.$ALG($REQ.form.get($PW).encode(), ...)'
+          - pattern: 'hashlib.$ALG($REQ.json[$PW], ...)'
+          - pattern: 'hashlib.$ALG($REQ.json[$PW].encode(), ...)'
+          - pattern: 'hashlib.$ALG($PW, ...)'
+          - pattern: 'hashlib.$ALG($PW.encode(), ...)'
+      - metavariable-regex:
+          metavariable: $ALG
+          regex: '^(md5|sha1|sha256)$'
+      - metavariable-regex:
+          metavariable: $PW
+          regex: "^['\"]?(password|passwd|pwd)['\"]?$"
