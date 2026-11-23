@@ -11,6 +11,7 @@
  */
 import { resolve } from 'node:path';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.mjs';
 import { runProviders } from './providers/registry.mjs';
@@ -39,6 +40,7 @@ import { discoverSourceDirs, skipCoveredDirs } from './discover.mjs';
 import { detectAppCheckOff, detectStack } from './stack.mjs';
 import { detectAgentProvenance } from './agent-provenance.mjs';
 import { renderFixPrompts } from './fix-prompts.mjs';
+import { parseFixClaims, verifyFixClaims } from './claim-check.mjs';
 import { corroborateFindings, dedupeFindings, sortFindings } from './findings.mjs';
 import { computeScores, MAX_TOTAL_SCORE, summarizeDependencies } from './scoring.mjs';
 import { computeCalibration } from './calibration.mjs';
@@ -157,6 +159,55 @@ export async function run(configPath, options) {
       finding.inTests = true;
     }
   }
+
+  // Agent-log claim cross-check: the remediation workflow records
+  // `- [x] TD-xxx — fixed in <file>` lines in the agent-workflow logs. Re-verify
+  // each claim against THIS scan — a claim is contradicted when the same
+  // teardown is still reported in the same file. Contradictions are appended
+  // as advisories (reported, not scored) so FIX-PROMPTS.md re-queues them.
+  /** @type {import('./types.mjs').Report['claimCrossCheck']} */
+  let claimCrossCheck;
+  if (agentProvenance.agentLogFiles.length > 0) {
+    /** @type {import('./claim-check.mjs').AgentClaim[]} */
+    const claims = [];
+    for (const logFile of agentProvenance.agentLogFiles) {
+      let content = '';
+      try {
+        content = readFileSync(resolve(options.repoRoot, logFile), 'utf8');
+      } catch {
+        continue;
+      }
+      claims.push(...parseFixClaims(content));
+    }
+    if (claims.length > 0) {
+      const verified = verifyFixClaims(sorted, config.enabledRules, claims);
+      const contradicted = verified.filter((claim) => claim.status === 'contradicted');
+      for (const claim of contradicted) {
+        sorted.push({
+          id: `claims:contradicted:${claim.teardownId}:${claim.file ?? '?'}`,
+          kind: 'hygiene',
+          file: claim.file ?? agentProvenance.agentLogFiles[0],
+          line: null,
+          column: null,
+          severity: 'medium',
+          pillar: 'security',
+          teardownId: claim.teardownId,
+          title: `Claimed fix for ${claim.teardownId} did not take effect`,
+          message: `An agent-workflow log claims ${claim.teardownId} was fixed${claim.file ? ` in \`${claim.file}\`` : ''}, but this scan still reports it there — the fix is missing or was reverted. Re-apply it and re-run the scan.`,
+          fixSummary: `Re-apply the ${claim.teardownId} fix and re-run the scan until the claim holds.`,
+          source: { provider: 'claims', ruleId: 'contradicted-fix-claim' },
+          dependency: null,
+          advisory: true,
+        });
+      }
+      claimCrossCheck = {
+        total: verified.length,
+        contradicted: contradicted.length,
+        claims: verified,
+      };
+      log(`  agent-log claims: ${verified.length} (${contradicted.length} contradicted, ${verified.filter((c) => c.status === 'holds').length} hold)`);
+    }
+  }
   // Dependency CVEs score separately: "upgrade this package" is not the same
   // remediation as "rewrite this code", and the quiz has no dependency axis.
   // Advisory findings (e.g. a secret in a conventional config file) are flagged
@@ -207,6 +258,7 @@ export async function run(configPath, options) {
     ...(agentProvenance.signals.length > 0 || agentProvenance.agentLogFiles.length > 0
       ? { agentProvenance }
       : {}),
+    ...(claimCrossCheck ? { claimCrossCheck } : {}),
   });
 
   // AI remediation companion: one copy-paste prompt per finding group, written

@@ -193,7 +193,16 @@
  * @property {Readiness | undefined} [readiness] - go-live verdict (go / conditional / no-go).
  * @property {Record<string, boolean> | undefined} [stack] - scan-time stack markers (Firebase/Firestore/Prisma/…).
  * @property {AgentProvenance | undefined} [agentProvenance] - AI-coding tool markers + user-named agent-log files.
+ * @property {ClaimCrossCheck | undefined} [claimCrossCheck] - agent-log remediation claims re-verified against this scan.
  * @property {Remediation | undefined} [remediation] - FIX-PROMPTS.md companion written next to the report.
+ */
+
+/**
+ * Agent-log remediation claims re-verified against the current scan.
+ * @typedef {Object} ClaimCrossCheck
+ * @property {number} total — claims parsed from the agent-workflow logs.
+ * @property {number} contradicted — `- [x]` claims the scan disproves.
+ * @property {Array<{ teardownId: string; file: string | null; status: 'holds' | 'contradicted' | 'acknowledged' | 'not-checkable'; detail: string }>} claims
  */
 
 export {};

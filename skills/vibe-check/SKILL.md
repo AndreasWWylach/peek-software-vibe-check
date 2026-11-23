@@ -49,8 +49,8 @@ files the scan listed under "Agent Provenance"):
 ```
 
 Use `- [x] … — fixed in <file>` for fixes and `- [ ] … — false positive, <why>`
-for findings you intentionally left — a later scan can cross-check each claim
-against the code.
+for findings you intentionally left — the next scan re-verifies every claim
+against the code and contradicts claims that do not hold.
 
 ## Honesty rules
 

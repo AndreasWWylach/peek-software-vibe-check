@@ -35,6 +35,10 @@
     "calibration": { "$ref": "#/definitions/calibration" },
     "readiness": { "$ref": "#/definitions/readiness" },
     "agentProvenance": { "$ref": "#/definitions/agentProvenance" },
+    "claimCrossCheck": {
+      "description": "Agent-log remediation claims re-verified against this scan.",
+      "$ref": "#/definitions/claimCrossCheck"
+    },
     "remediation": {
       "type": "object",
       "description": "AI remediation companion — FIX-PROMPTS.md written next to this report.",
@@ -42,6 +46,27 @@
     }
   },
   "definitions": {
+    "claimCrossCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "contradicted", "claims"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "contradicted": { "type": "integer", "minimum": 0 },
+        "claims": { "type": "array", "items": { "$ref": "#/definitions/agentClaim" } }
+      }
+    },
+    "agentClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["teardownId", "status"],
+      "properties": {
+        "teardownId": { "type": "string", "pattern": "^TD-\\d+$" },
+        "file": { "type": ["string", "null"] },
+        "status": { "enum": ["holds", "contradicted", "acknowledged", "not-checkable"] },
+        "detail": { "type": "string" }
+      }
+    },
     "remediation": {
       "type": "object",
       "additionalProperties": false,

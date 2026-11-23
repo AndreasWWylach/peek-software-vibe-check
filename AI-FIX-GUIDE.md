@@ -36,7 +36,8 @@ vibe-check fix-prompts --report peek-report.json
    ```
 
    `- [x] … fixed in <file>` for fixes, `- [ ] … false positive, <why>` for
-   findings intentionally left — later scans can cross-check each claim.
+   findings intentionally left — the next scan re-verifies each claim against
+   the code and contradicts claims that do not hold.
 
 ## Why this works where plain prompts don't
 

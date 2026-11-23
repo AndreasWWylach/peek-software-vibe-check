@@ -97,6 +97,10 @@ export function renderMarkdown(report) {
     lines.push(...renderAgentProvenance(report.agentProvenance));
   }
 
+  if (report.claimCrossCheck) {
+    lines.push(...renderClaimCrossCheck(report.claimCrossCheck));
+  }
+
   lines.push('## Findings Summary');
   lines.push('| Check | Findings | What |');
   lines.push('| --- | ---: | --- |');
@@ -275,6 +279,33 @@ function renderAgentProvenance(provenance) {
   if (provenance.agentLogFiles.length > 0) {
     lines.push('Agent-workflow log files you asked to watch:');
     for (const file of provenance.agentLogFiles) lines.push(`- \`${file}\``);
+  }
+  lines.push('');
+  return lines;
+}
+
+/**
+ * Render the agent-log claim cross-check — `- [x] TD-xxx — fixed in <file>`
+ * claims from the workflow logs, each re-verified against THIS scan.
+ * @param {import('./types.mjs').ClaimCrossCheck} crossCheck
+ * @returns {string[]}
+ */
+function renderClaimCrossCheck(crossCheck) {
+  /** @type {string[]} */
+  const lines = ['## Agent-Log Claims Cross-Check'];
+  lines.push(
+    `_${crossCheck.total} remediation claim(s) found in the workflow logs — each re-verified against this scan. ${crossCheck.contradicted} contradicted._`,
+  );
+  const emoji = { holds: '✅', contradicted: '⚠️', acknowledged: '📝', 'not-checkable': '❓' };
+  for (const claim of crossCheck.claims) {
+    const where = claim.file ? ` \`${claim.file}\`` : '';
+    const statusText = {
+      holds: 'the scan no longer reports it',
+      contradicted: 'STILL reported by this scan — the fix did not take effect',
+      acknowledged: 'declared unfixed / false positive — left as-is',
+      'not-checkable': 'not part of this scan\'s enabled rules',
+    }[claim.status];
+    lines.push(`- ${emoji[claim.status]} ${claim.teardownId}${where} — ${statusText}`);
   }
   lines.push('');
   return lines;
