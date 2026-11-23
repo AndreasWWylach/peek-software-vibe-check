@@ -13,7 +13,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 3. **Inert config.** `peek-config.json` is schema-validated data — never executed code.
 4. **Open & reviewable.** Apache-2.0. No hidden actions.
 
-## Prerequisites (depending on your stack)
+## Prerequisites (for all supported stacks)
 
 - Node.js ≥ 22
 - [semgrep](https://semgrep.dev) — custom teardown rules (core)

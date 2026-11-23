@@ -494,7 +494,47 @@ One command, two personalities — beginner and advanced meet in the middle.
 |---|---|
 | `vibe-check doctor` | read-only prerequisite check (cross-platform, runs on Node) |
 | `vibe-check setup` | interactive installer with `y/n/skip` |
+| `vibe-check setup --all` | consider every tool, even those the detected stack does not need |
 | `setup.sh` | thin macOS/Linux wrapper: bootstraps Node, then delegates to `vibe-check setup` |
+
+**Stack-aware tool selection (2026-11-23):** `setup` and `doctor` detect the
+repo they run in and install only what its stack will use. Three steps:
+
+1. **Detect** — `detectStackNeeds` does a bounded walk collecting **file names
+   only** (cap 5000 names, depth ≤ 6, skips ignored dirs like `node_modules` /
+   `vendor` and symlinks; no file contents are read):
+
+   | Flag | Signal |
+   |---|---|
+   | `js` | any `package.json` |
+   | `python` | `requirements.txt` · `pyproject.toml` · `setup.py` · `Pipfile` |
+   | `php` | `composer.json` |
+   | `go` | `go.mod` |
+   | `docker` | any `Dockerfile*` |
+   | `iac` | `Dockerfile*` · `docker-compose*` · `*.tf` |
+   | `lockfile` | `package-lock.json` · `yarn.lock` · `poetry.lock` · `composer.lock` · `go.sum` · … |
+   | `anyStack` | any of js / python / php / go / docker |
+
+2. **Map** — `toolNeed(toolId, stack)` decides per tool:
+
+   | Tool | Needed when |
+   |---|---|
+   | node, semgrep, osv-scanner, scc, gitleaks | always (engine core) |
+   | madge, eslint | `js` |
+   | bandit | `python` |
+   | phpstan | `php` |
+   | gosec | `go` |
+   | hadolint | `docker` |
+   | checkov | `iac` |
+   | trivy | `lockfile` or `docker` |
+
+3. **Gate** — a tool is auto-skipped only when **`anyStack` is true AND the
+   tool does not match**. Three deliberate properties: an empty/foreign
+   directory (nothing detected) keeps every tool a candidate — the installer
+   never guesses silently; the skip reason is always printed
+   (`doctor` annotates "not needed here: …", `setup` prints it per tool); and
+   skipping is safe — run `setup` again in another repo or use `--all`, and the
+   engine degrades gracefully regardless (provider `available()` gate).
 
 **Script contract (non-negotiables):**
 
