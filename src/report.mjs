@@ -357,7 +357,7 @@ function renderReadiness(readiness) {
   /** @type {string[]} */
   const lines = ['## Go-Live Readiness'];
   const emoji = readiness.status === 'go' ? '🟢' : readiness.status === 'conditional' ? '🟡' : '🔴';
-  const label = readiness.status === 'go' ? 'Ready to go live' : readiness.status === 'conditional' ? 'Ready with conditions' : 'Do not go live';
+  const label = readiness.status === 'go' ? 'Ready to go live' : readiness.status === 'conditional' ? 'Ready with conditions' : 'Please review before going live';
   lines.push(`**${emoji} ${label}**`);
   for (const condition of readiness.conditions) {
     lines.push(`- ${condition}`);

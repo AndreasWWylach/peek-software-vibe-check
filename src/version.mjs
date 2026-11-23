@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const PKG = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 
 /** Engine name, as printed in reports and the CLI banner. */
-export const ENGINE_NAME = 'vibe-check';
+export const ENGINE_NAME = 'peek.software vibe-check';
 
 /** Engine version, read from package.json. */
 export const ENGINE_VERSION = /** @type {string} */ (PKG.version);

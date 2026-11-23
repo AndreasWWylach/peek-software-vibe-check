@@ -15,6 +15,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.mjs';
 import { runProviders } from './providers/registry.mjs';
+import { paint } from './color.mjs';
 import { semgrepProvider } from './providers/semgrep.mjs';
 import { osvProvider } from './providers/osv.mjs';
 import { madgeProvider } from './providers/madge.mjs';
@@ -75,6 +76,7 @@ function hasCiAdvisory(findings, ruleId) {
  * @returns {Promise<Report>} the generated report (also written to disk).
  */
 export async function run(configPath, options) {
+  const startedAt = Date.now();
   const writeFixPrompts = options.fixPrompts !== false;
   const config = await loadConfig(configPath);
   const log = options.quiet
@@ -291,8 +293,13 @@ export async function run(configPath, options) {
     await writeFile(resolve(options.outDir, 'FIX-PROMPTS.md'), fixPromptsMarkdown, 'utf8');
   }
 
-  log(`risk score: ${total} / ${MAX_TOTAL_SCORE} (${tier})`);
-  log(writeFixPrompts ? 'wrote peek-report.json + AUDIT-REPORT.md + FIX-PROMPTS.md' : 'wrote peek-report.json + AUDIT-REPORT.md');
+  const tierColor = tier === 'green' ? '32' : tier === 'amber' ? '33' : '31';
+  log(paint(`1;${tierColor}`, `risk score: ${total} / ${MAX_TOTAL_SCORE} (${tier})`));
+  const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+  const wrote = writeFixPrompts
+    ? 'peek-report.json + AUDIT-REPORT.md + FIX-PROMPTS.md'
+    : 'peek-report.json + AUDIT-REPORT.md';
+  log(paint('32', `wrote ${wrote} in ${options.outDir} (${seconds}s)`));
 
   return report;
 }

@@ -16,6 +16,8 @@
 /** @typedef {import('../types.mjs').Finding} Finding */
 /** @typedef {import('../types.mjs').SkipRecord} SkipRecord */
 
+import { paint } from '../color.mjs';
+
 /**
  * Run every registered provider that is both installed and applicable.
  * @param {Provider[]} providers
@@ -30,7 +32,7 @@ export async function runProviders(providers, config, ctx) {
   const skipped = [];
 
   for (const provider of providers) {
-    ctx.log(`▸ ${provider.name} …`);
+    ctx.log(paint('36', `▸ ${provider.name} …`));
 
     if (!(await provider.available())) {
       skipped.push({
@@ -38,7 +40,7 @@ export async function runProviders(providers, config, ctx) {
         reason: 'not-installed',
         detail: `${provider.name} is not installed; install it to enable this check.`,
       });
-      ctx.log('  skipped (not installed)');
+      ctx.log(paint('90', '  skipped (not installed)'));
       continue;
     }
 
@@ -48,18 +50,19 @@ export async function runProviders(providers, config, ctx) {
         reason: 'not-applicable',
         detail: `${provider.name} does not apply to this app.`,
       });
-      ctx.log('  skipped (not applicable)');
+      ctx.log(paint('90', '  skipped (not applicable)'));
       continue;
     }
 
     try {
       const found = await provider.run(config, ctx);
       findings.push(...found);
-      ctx.log(`  ${found.length} finding(s)`);
+      // Positive counts stand out (yellow); zero is calm (dim).
+      ctx.log(paint(found.length > 0 ? '33' : '90', `  ${found.length} finding(s)`));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       skipped.push({ id: provider.id, reason: 'error', detail: message });
-      ctx.log(`  error: ${message}`);
+      ctx.log(paint('31', `  error: ${message}`));
     }
   }
 

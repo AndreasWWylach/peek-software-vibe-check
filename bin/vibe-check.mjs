@@ -19,7 +19,7 @@ import { doctor, runOnboarding } from '../src/onboarding.mjs';
 import { renderFixPrompts } from '../src/fix-prompts.mjs';
 import { ENGINE_NAME, ENGINE_VERSION } from '../src/version.mjs';
 
-const HELP = `vibe-check — open-source, local deep-scan engine for peek.software
+const HELP = `peek.software vibe-check — open-source, local deep-scan engine for peek.software
 
 Usage:
   vibe-check run --config <path> [--out <dir>] [--quiet] [--no-fix-prompts]
