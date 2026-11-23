@@ -248,9 +248,31 @@ from the app's data layer (`src/tenant/`), never from the intake:
 **Firestore rule/query cross-check** — for Firebase apps, `firestore.rules` is
 parsed (`src/firestore/scope.mjs`) and Firestore queries in source are checked
 against the rule-required fields (e.g. `ownerUid`); a query that doesn't
-constrain by them is a `rule-query-mismatch` finding (TD-008). The cross-check
-needs the rules and the client queries in one repo — when they're split across
-repos (as in a monorepo where rules live elsewhere), it is skipped honestly.
+constrain by them is a `rule-query-mismatch` finding (TD-008). The parser is
+**helper-aware**: it resolves the helper functions real rules wrap their
+conditions in (`canManageProjectData(projectData(projectId))`,
+`shootReadable(shootId)`, `isSuiteStaff()`, …), expands `&&`/`||` into
+alternative field sets (a query that satisfies any one alternative is
+compliant), and joins multiline `allow` conditions. Param fields
+(`p.get('ownerId')`) count only when the helper's `get(/databases/…/documents/
+…)` paths target the matched collection, so `match /projectPersonnel` read via
+`canManageProjectData(projectData(…))` never demands the project's fields.
+Match semantics mirror Firestore: a plain `match /shoots/{shootId}` governs only
+that depth (not `shoots/{id}/logs` subcollections), `{…=**}` rules recurse, and
+a leading `{path=**}` rule suffix-matches deeper paths. Queries in test files
+(`rules-test.mjs`, `*.test.*`, `*-test.*`) are skipped — denied-shape queries
+there are deliberate negative assertions. The cross-check needs the rules and
+the client queries in one repo — when they're split across repos (the shared
+Firebase project layout: reelvenue's client in one repo, the fenced rules in
+setdots), the report says so in the missing-rules message and the
+not-statically-verifiable guidance instead of guessing.
+
+**Storage rules in shared projects** — per-bucket rules files
+(`storage.rules`, `storage.rvmedia.rules`, …) are all recorded and checked
+(open rules, missing auth), and client-side `firebase/storage` usage (an
+`getStorage`/`uploadBytes` import) sets the storage marker even when no rules
+file is in the repo, so a repo whose bucket rules live in a sibling repo gets an
+honest "no `storage.rules` checked in" advisory rather than silence.
 
 **PostgreSQL/Supabase RLS check** — for Postgres apps the table-level boundary
 is row-level security, not an ORM `where` clause. `src/providers/rls.mjs` parses
