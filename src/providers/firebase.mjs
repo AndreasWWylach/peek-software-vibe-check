@@ -66,7 +66,7 @@ export const firebaseProvider = {
           findings.push(noAuthFinding(rulesFile, 'high'));
         }
         // Query side: cross-check client reads against the rule-required scope
-        // (the rule/query mismatch that shipped as reelvenue's film-assets bug).
+        // (the rule/query mismatch class this engine was built to catch).
         for (const mismatch of crossCheckQueries(ctx, content)) {
           findings.push(ruleQueryMismatchFinding(mismatch));
         }

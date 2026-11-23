@@ -1,4 +1,5 @@
-// VULNERABLE — entitlement written straight from the client's claim (setdots S2 class).
+// VULNERABLE — entitlement written straight from the client's claim (a real
+// marketplace app's invite-gate class).
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 

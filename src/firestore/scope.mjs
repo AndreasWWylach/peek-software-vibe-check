@@ -6,8 +6,8 @@
  * @fileoverview Firestore rule/query scope cross-check (TD-008, Firestore flavor).
  *
  * Firestore's tenant/ownership boundary lives in `firestore.rules`, not in a
- * database column. The shipped reelvenue bug was the mismatch side: a rule
- * correctly required `ownerUid`, but the client query did not constrain by it.
+ * database column. The mismatch class this catches: a rule correctly required
+ * `ownerUid`, but the client query did not constrain by it.
  *
  * Two halves:
  *   1. `parseRulesScope` — extract, per `match` path, the auth-scope fields the

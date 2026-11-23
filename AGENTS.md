@@ -4,7 +4,7 @@
 
 ## Read first
 
-- `docs/deep-scan-engine.md` — the complete design: vision, architecture, scoring model, rule catalog, implementation phases, and open decisions. The code now implements it; §9 tracks phase status, §5.4/§7 track what shipped.
+- `docs/deep-scan-engine.md` — the complete design: vision, architecture, scoring model, rule catalog, implementation phases, and open decisions. The code now implements it; §9 tracks phase status, §5.4/§7 track what shipped. (Internal — the `docs/` folder is gitignored and not published in the public repo.)
 
 ## What it is
 

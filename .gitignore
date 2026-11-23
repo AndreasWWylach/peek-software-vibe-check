@@ -16,3 +16,6 @@ coverage/
 # Internal planning & research notes (not part of the public repo)
 internal/
 examples/tmp-tenant-e2e/
+
+# Internal design/derivation docs — kept out of the public repo.
+docs/
