@@ -8,7 +8,7 @@ Because there are no independent third-party benchmark suites comparing these br
 | Feature / Metric | peek-software-vibe-check | [Vibeship Scanner](https://github.com/vibeforge1111/vibeship-scanner) | [Vibe Scanner](https://github.com/CyprianTinasheAarons/vibe-scanner) | [Vibe-Check](https://github.com/benavlabs/vibe-check) |
 |---|---|---|---|---|
 | Primary Approach | Deep local SAST + architecture & tenant audit | Broad SAST + AI fix prompt generator | Lightweight Next.js / Supabase repo + URL check | Live URL probe + AI agent rules/audit prompt |
-| Underlying Engines | Up to 19 providers (semgrep, osv-scanner, madge, scc, gitleaks, eslint, phpstan, bandit, gosec, etc.) | 4 tools (Opengrep, Trivy, Gitleaks, npm audit) | Pure Python custom checks (9 repo rules + URL checks) | Dependency-free Python live probe (check.py) + LLM prompts
+| Underlying Engines | Up to 20 providers (semgrep, osv-scanner, madge, scc, gitleaks, eslint, phpstan, bandit, gosec, etc.) | 4 tools (Opengrep, Trivy, Gitleaks, npm audit) | Pure Python custom checks (9 repo rules + URL checks) | Dependency-free Python live probe (check.py) + LLM prompts
 | Setup Weight | Heavy (requires Node ≥ 22 + up to 12 external CLI binaries) | Low (web UI via GitHub OAuth or self-hosted) | Very Low (standard Python 3.10+ package) | Minimal (copy markdown files / single Python script)
 | Code Privacy	100% local & offline (zero telemetry; only OSV CVE check uses network)| Web version requires repo access (public or GitHub OAuth) | 100% local read-only CLI / MCP server | 100% local / external HTTP probe |
 | Live URL Scanning | No (static source & config analysis only) | No (repo-only) | Yes (checks headers, CORS, exposed files) | Yes (checks headers, exposed .env/.git, source maps)
@@ -61,11 +61,14 @@ here is written from scratch, per the no-copying rule):
    zero false positives across peek-software/lastmile/reelvenue/brixx),
    and CSRF (shipped 2026-11-22 as the `csrf` provider — advisory, gated on
    DETECTED cookie auth; token-auth apps are immune by default and stay
-   silent; Symfony/Laravel/Django/Flask-WTF built-ins recognized), and weak
+   silent; Symfony/Laravel/Django/Flask-WTF built-ins recognized), weak
    password hashing (shipped 2026-11-22 as TD-058 — scored, golden-tested
-   across TS/JS/Python/PHP; zero false positives on the six dev apps).
-   Missing (Phase 5 priorities): wildcard-CORS code config, insecure file
-   uploads, debug-endpoint exposure, rate-limit presence.
+   across TS/JS/Python/PHP; zero false positives on the six dev apps), and
+   wildcard-CORS code config (shipped 2026-11-23 as the `cors` provider —
+   advisory, server code + committed hosting config, complementing the live
+   probe).
+   Missing (Phase 5 priorities): insecure file uploads, debug-endpoint
+   exposure, rate-limit presence.
 3. **Agent-consumable fix prompts + a Claude Code skill** — both small scanners
    ship one; ours can be richer because every finding carries a full teardown
    (`fixSummary` + hardened code link). Planned together with the
