@@ -138,7 +138,7 @@ export function looksLikeSpaFallback(response) {
  * @returns {Promise<ProbeReport>}
  */
 export async function probeUrl(raw, options = {}) {
-  const log = options.log ?? /** @param {string} _line */ ((_line) => {});
+  const log = options.log ?? (() => {});
   const validated = validateProbeUrl(raw);
 
   /** @type {ProbeResult[]} */

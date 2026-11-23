@@ -189,7 +189,7 @@ async function main() {
 
   if (parsed.command === 'probe') {
     const report = await probeUrl(parsed.target, {
-      log: parsed.json ? /** @param {string} _line */ ((_line) => {}) : (line) => console.log(line),
+      log: parsed.json ? () => {} : (line) => console.log(line),
     });
     if (parsed.out) {
       await mkdir(parsed.out, { recursive: true });

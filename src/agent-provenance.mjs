@@ -43,7 +43,7 @@ const GIT_LOG_LIMIT = 500;
  * @param {{ repoRoot: string, targets: string[], patterns: string[] }} input
  * @returns {{ signals: string[], agentLogFiles: string[] }}
  */
-export function detectAgentProvenance({ repoRoot, targets, patterns }) {
+export function detectAgentProvenance({ repoRoot, patterns }) {
   /** @type {Set<string>} */
   const signalSet = new Set();
 

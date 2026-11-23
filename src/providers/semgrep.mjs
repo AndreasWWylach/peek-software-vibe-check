@@ -21,11 +21,12 @@
  * returns no findings.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { commandAvailable, runCommand } from '../proc.mjs';
 import { enrichTeardowns } from '../catalog.mjs';
 import { isIgnoredDir, isVendoredPath } from '../ignore.mjs';
+import { readLine, shouldSkipSecret } from '../secretClassify.mjs';
 import { materializeTenantRule, readTenantColumn } from './tenant-rule.mjs';
 import { discoverTenant, guidanceFor } from '../tenant/discover.mjs';
 
@@ -313,9 +314,9 @@ export const semgrepProvider = {
     if (!args.some((arg) => !arg.startsWith('--'))) return [];
 
     const stdout = runCommand('semgrep', args, { cwd: ctx.repoRoot });
-    const findings = parseSemgrepJson(stdout, ctx.repoRoot).filter(
-      (finding) => !isIgnoredDir(finding.file) && !isVendoredPath(finding.file),
-    );
+    const findings = parseSemgrepJson(stdout, ctx.repoRoot)
+      .filter((finding) => !isIgnoredDir(finding.file) && !isVendoredPath(finding.file))
+      .filter((finding) => !isClassifiedSecret(finding, ctx.repoRoot));
     // Promote vendored rules that map to a deterministic-defect teardown
     // (SQLi / command injection) from advisory hygiene to scored teardowns.
     for (const finding of findings) {
@@ -332,6 +333,22 @@ export const semgrepProvider = {
     return enrichTeardowns(findings);
   },
 };
+
+/**
+ * TD-016 findings from ANY provider go through the same secret classifier
+ * (gitleaks, trivy, and now semgrep) so they agree on what is a real secret:
+ * placeholder examples, `changeme`, alphabet constants and public-by-design
+ * keys are skipped, never reported — the engine's own detector docs contain
+ * `sk_test_placeholder` examples that would otherwise score against itself.
+ * @param {Finding} finding
+ * @param {string} repoRoot
+ * @returns {boolean} true when the finding is a classified non-secret.
+ */
+export function isClassifiedSecret(finding, repoRoot) {
+  if (finding.teardownId !== 'TD-016' || finding.line == null) return false;
+  const abs = isAbsolute(finding.file) ? finding.file : join(repoRoot, finding.file);
+  return shouldSkipSecret(readLine(abs, finding.line), abs);
+}
 
 /**
  * Parse `semgrep --json` output into findings.

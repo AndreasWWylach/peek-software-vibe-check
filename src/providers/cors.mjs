@@ -88,7 +88,7 @@ export const corsProvider = {
       }
       // Bound the scan per file — CORS setup lives near the top.
       if (!WILDCARD_CORS_RE.test(content.slice(0, 200000))) continue;
-      findings.push(wildcardFinding(file, CREDENTIALS_RE.test(content.slice(0, 200000)), frameworks));
+      findings.push(wildcardFinding(file, CREDENTIALS_RE.test(content.slice(0, 200000))));
     }
     return findings;
   },
@@ -113,10 +113,9 @@ function isScannable(file) {
  * The wildcard-CORS advisory for one file.
  * @param {string} file
  * @param {boolean} withCredentials
- * @param {Set<string>} frameworks
  * @returns {Finding}
  */
-function wildcardFinding(file, withCredentials, frameworks) {
+function wildcardFinding(file, withCredentials) {
   const credentialsNote = withCredentials
     ? ' Credentials are also enabled alongside the wildcard — browsers reject that combination, and it signals the intent to accept credentials from any origin.'
     : '';
