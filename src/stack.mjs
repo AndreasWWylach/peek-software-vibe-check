@@ -58,6 +58,10 @@ const SOURCE_EXTS = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs']);
 const CLIENT_FIRESTORE_RE =
   /\bgetFirestore\s*\(\s*\)|firebase\.firestore\s*\(|initializeFirestore\s*\(/;
 
+/** Client SDK Firebase Storage usage (bucket access gated by storage rules). */
+const CLIENT_STORAGE_RE =
+  /\bgetStorage\s*\(|firebase\.storage\s*\(|from\s+['"]firebase\/storage['"]/;
+
 /** Cloud Function HTTP handlers (`onCall`/`onRequest`) — the callable surface. */
 const FN_HANDLER_RE = /\bon(?:Call|Request)\s*\(/;
 
@@ -83,8 +87,8 @@ export function scanRepo(repoRoot, targets) {
   const markers = new Set();
   /** @type {Map<string, string>} basename → repo-relative path (first found). */
   const rulesFiles = new Map();
-  /** @type {{ clientFirestore: boolean; unauthFunctions: string[] }} */
-  const state = { clientFirestore: false, unauthFunctions: [] };
+  /** @type {{ clientFirestore: boolean; clientStorage: boolean; unauthFunctions: string[] }} */
+  const state = { clientFirestore: false, clientStorage: false, unauthFunctions: [] };
 
   if (existsSync(join(repoRoot, 'firebase.json'))) markers.add('firebase');
   readPackageJson(join(repoRoot, 'package.json'), markers);
@@ -92,12 +96,14 @@ export function scanRepo(repoRoot, targets) {
   // Rules files typically live at the repo root — outside any scan target.
   recordRootRules('firestore.rules', repoRoot, markers, rulesFiles);
   recordRootRules('storage.rules', repoRoot, markers, rulesFiles);
+  recordRootStorageVariants(repoRoot, markers, rulesFiles);
 
   for (const target of targets) {
     walk(target, repoRoot, markers, rulesFiles, state);
   }
-  // Client SDK direct usage implies Firestore, even without a rules file.
+  // Client SDK direct usage implies the service, even without a rules file.
   if (state.clientFirestore) markers.add('firestore');
+  if (state.clientStorage) markers.add('storage');
   return {
     markers,
     rulesFiles,
@@ -139,7 +145,7 @@ export function findRulesFile(repoRoot, targets, name) {
  * @param {string} repoRoot
  * @param {Set<string>} markers
  * @param {Map<string, string>} rulesFiles
- * @param {{ clientFirestore: boolean; unauthFunctions: string[] }} state
+ * @param {{ clientFirestore: boolean; clientStorage: boolean; unauthFunctions: string[] }} state
  */
 function walk(dir, repoRoot, markers, rulesFiles, state) {
   let entries;
@@ -166,7 +172,8 @@ function walk(dir, repoRoot, markers, rulesFiles, state) {
       } else if (entry.name === 'firestore.rules') {
         markers.add('firestore');
         recordFile(rulesFiles, entry.name, abs, repoRoot);
-      } else if (entry.name === 'storage.rules') {
+      } else if (/^storage\..*\.rules$/.test(entry.name)) {
+        // `storage.rules`, `storage.rvmedia.rules`, ... - one file per bucket.
         markers.add('storage');
         recordFile(rulesFiles, entry.name, abs, repoRoot);
       } else if (entry.name === 'schema.prisma') {
@@ -197,11 +204,11 @@ function isSourceFile(name) {
 }
 
 /**
- * Read a source file and record client-Firestore usage + unauthenticated
+ * Read a source file and record client-Firestore/storage usage + unauthenticated
  * Cloud Function handlers.
  * @param {string} abs
  * @param {string} repoRoot
- * @param {{ clientFirestore: boolean; unauthFunctions: string[] }} state
+ * @param {{ clientFirestore: boolean; clientStorage: boolean; unauthFunctions: string[] }} state
  */
 function scanSource(abs, repoRoot, state) {
   let text = '';
@@ -211,6 +218,7 @@ function scanSource(abs, repoRoot, state) {
     return;
   }
   if (!state.clientFirestore && CLIENT_FIRESTORE_RE.test(text)) state.clientFirestore = true;
+  if (!state.clientStorage && CLIENT_STORAGE_RE.test(text)) state.clientStorage = true;
   if (FN_HANDLER_RE.test(text) && !AUTH_RE.test(text)) {
     state.unauthFunctions.push(toRepoFile(abs, repoRoot));
   }
@@ -296,6 +304,28 @@ function recordRootRules(name, repoRoot, markers, rulesFiles) {
   if (!existsSync(abs)) return;
   markers.add(name === 'firestore.rules' ? 'firestore' : 'storage');
   recordFile(rulesFiles, name, abs, repoRoot);
+}
+
+/**
+ * Record per-bucket storage rules variants at the repo root (`storage.*.rules`),
+ * e.g. `storage.rvmedia.rules` in a shared Firebase project.
+ * @param {string} repoRoot
+ * @param {Set<string>} markers
+ * @param {Map<string, string>} rulesFiles
+ */
+function recordRootStorageVariants(repoRoot, markers, rulesFiles) {
+  let entries;
+  try {
+    entries = readdirSync(repoRoot, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isFile() && /^storage\..*\.rules$/.test(entry.name)) {
+      markers.add('storage');
+      recordFile(rulesFiles, entry.name, join(repoRoot, entry.name), repoRoot);
+    }
+  }
 }
 
 /**

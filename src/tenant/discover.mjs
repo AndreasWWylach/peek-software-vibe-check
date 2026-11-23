@@ -41,6 +41,11 @@ export function discoverTenant(ctx) {
     );
     return descriptor ? { descriptor, dataLayer: 'sql' } : { notVerifiable: 'sql-no-tenant-entity' };
   }
+  // Firestore apps: the access boundary is the security rules, checked by the
+  // Firebase provider (rule/query cross-check when both halves are in-repo).
+  if (stack.firestore) {
+    return { notVerifiable: 'firestore-rule-query-cross-check' };
+  }
   // No parseable data layer yet (TypeORM, Mongoose, … land here as more parsers
   // ship). Be honest rather than silent.
   return { notVerifiable: 'no-parseable-data-layer' };
@@ -65,6 +70,8 @@ export function guidanceFor(reason, tenantName) {
       return 'Tenant data may be present in the SQL schema but no tenant table could be identified (no table referenced by two or more others). Review data-access paths manually, or set ruleParams.tenantColumn to check a specific column.';
     case 'sql-not-checkable':
       return `Tenant root detected in the SQL schema${tenantName ? ` (${tenantName})` : ''}, but raw-SQL query scoping is not yet auto-checkable by the scanner. Review data-access paths manually, or set ruleParams.tenantColumn.`;
+    case 'firestore-rule-query-cross-check':
+      return 'Firestore access control is checked by the Firebase rules provider: open rules, missing auth, and a rule/query scope cross-check when `firestore.rules` and the client SDK live in the same repo. Tenant isolation across a shared Firebase project (rules maintained in a sibling repo) is not statically verifiable - review the fenced per-product rules sections manually.';
     case 'no-parseable-data-layer':
       return "Tenant isolation could not be verified automatically: the app's data-access layer is not yet parseable by the scanner (e.g. TypeORM, Mongoose, or an auth service). Review data-access paths manually, or set ruleParams.tenantColumn.";
     default:

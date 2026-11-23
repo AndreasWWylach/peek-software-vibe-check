@@ -119,8 +119,9 @@ export function hasNonCodeExt(repoFile) {
 export function isTestFile(repoFile) {
   const segments = repoFile.split(/[\\/]/);
   const base = segments.pop() ?? '';
-  // `inbound.test.js`, `foo.spec.ts`, `test_foo.py`, `foo_test.py`, `foo.test`…
-  if (/\.(test|spec)(\.|$)|^test_|_test\./i.test(base)) return true;
+  // `inbound.test.js`, `foo.spec.ts`, `rules-test.mjs`, `test_foo.py`, `foo_test.py`,
+  // `foo.test`, `foo-test.js`, `foo-spec.ts`…
+  if (/\.(test|spec)(\.|$)|-(test|spec)\.|^test_|_test\./i.test(base)) return true;
   // …or anywhere under a test / fixture directory.
   return segments.some((segment) => /^(tests?|__tests__|fixtures?|spec|mocks?)$/i.test(segment));
 }

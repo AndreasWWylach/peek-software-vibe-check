@@ -19,7 +19,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { scanRepo } from '../stack.mjs';
-import { isIgnoredDir } from '../ignore.mjs';
+import { isIgnoredDir, isTestFile } from '../ignore.mjs';
 import { parseRulesScope, scanFirestoreQueries, matchScopeRule } from '../firestore/scope.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
@@ -53,8 +53,10 @@ export const firebaseProvider = {
       const rulesFile = rulesFiles.get('firestore.rules') ?? null;
       if (!rulesFile) {
         // Client SDK direct access + no rules in repo = the boundary is either
-        // missing (test mode) or unverifiable out-of-band. Server-only (Admin
-        // SDK) access has no client boundary, so it's a softer signal.
+        // missing (test mode), unverifiable out-of-band, or maintained in a
+        // sibling repo of a shared Firebase project (common suite layout).
+        // Server-only (Admin SDK) access has no client boundary, so it's a
+        // softer signal.
         findings.push(missingRulesFinding('Firestore', clientFirestore ? 'critical' : 'medium', clientFirestore));
       } else {
         const content = readFileSafely(join(ctx.repoRoot, rulesFile));
@@ -72,9 +74,21 @@ export const firebaseProvider = {
     }
 
     if (storage) {
-      const rulesFile = rulesFiles.get('storage.rules') ?? null;
-      if (!rulesFile) {
+      // A shared project can have one rules file per bucket (`storage.rules`,
+      // `storage.rvmedia.rules`, ...) - check every one of them.
+      const storageFiles = [...rulesFiles.keys()].filter((k) => /^storage\..*\.rules$/.test(k)).sort();
+      if (storageFiles.length === 0) {
         findings.push(missingRulesFinding('Storage', 'medium', false));
+      } else {
+        for (const file of storageFiles) {
+          const relPath = /** @type {string} */ (rulesFiles.get(file));
+          const content = readFileSafely(join(ctx.repoRoot, relPath));
+          if (isOpenRules(content)) {
+            findings.push(openRulesFinding(file, 'critical'));
+          } else if (!requiresAuth(content)) {
+            findings.push(noAuthFinding(file, 'high'));
+          }
+        }
       }
     }
 
@@ -126,8 +140,8 @@ export function requiresAuth(text) {
 function missingRulesFinding(service, severity, clientDirect) {
   const name = service === 'Firestore' ? 'firestore.rules' : 'storage.rules';
   const message = clientDirect
-    ? `The frontend reads/writes ${service} directly via the client SDK, but no \`${name}\` is checked in — the access-control boundary is unverifiable (test-mode or console-managed rules).`
-    : `No \`${name}\` file is checked in. If all ${service} access is server-side (Admin SDK), the boundary lives in the function code — verify every function authenticates its caller.`;
+    ? `The frontend reads/writes ${service} directly via the client SDK, but no \`${name}\` is checked in — the access-control boundary is unverifiable (test-mode rules, console-managed rules, or rules maintained in a sibling repo of a shared Firebase project).`
+    : `No \`${name}\` file is checked in. If all ${service} access is server-side (Admin SDK), the boundary lives in the function code — verify every function authenticates its caller. For a shared Firebase project, the rules may live in a sibling repo.`;
   return {
     id: `firebase:missing-${name}`,
     kind: 'teardown',
@@ -139,7 +153,7 @@ function missingRulesFinding(service, severity, clientDirect) {
     teardownId: TEARDOWN_ID,
     title: `${service} has no security rules`,
     message,
-    fixSummary: `Add \`${name}\` requiring \`request.auth\` and tenant-scoped paths, then deploy it via firebase.json — or route all data access through authenticated Cloud Functions.`,
+    fixSummary: `Add \`${name}\` requiring \`request.auth\` and tenant-scoped paths, then deploy it via firebase.json — or route all data access through authenticated Cloud Functions. For a shared project, keep the fenced per-product rules section in the sibling repo that deploys them, and verify it covers this app's collections.`,
     source: { provider: 'firebase', ruleId: 'missing-rules' },
     dependency: null,
   };
@@ -233,11 +247,13 @@ function readFileSafely(file) {
 const CLIENT_EXTS = /\.(ts|tsx|js|mjs|cjs)$/i;
 
 /**
- * Recursively collect client source files under a directory (skips ignored dirs).
+ * Recursively collect client source files under a directory (skips ignored
+ * dirs and test files — rule emulator tests deliberately run denied queries).
  * @param {string} dir
- * @param {Set<string>} out — absolute paths, appended in place.
+ * @param {string} repoRoot
+ * @param {Set<string>} out - absolute paths, appended in place.
  */
-function collectClientFiles(dir, out) {
+function collectClientFiles(dir, repoRoot, out) {
   let entries;
   try {
     entries = readdirSync(dir, { withFileTypes: true });
@@ -249,9 +265,10 @@ function collectClientFiles(dir, out) {
     const abs = join(dir, entry.name);
     if (entry.isDirectory()) {
       if (isIgnoredDir(entry.name)) continue;
-      collectClientFiles(abs, out);
+      collectClientFiles(abs, repoRoot, out);
     } else if (entry.isFile() && CLIENT_EXTS.test(entry.name)) {
-      out.add(abs);
+      const repoFile = relative(repoRoot, abs).replace(/^[/\\]+/, '');
+      if (!isTestFile(repoFile)) out.add(abs);
     }
   }
 }
@@ -260,7 +277,7 @@ function collectClientFiles(dir, out) {
  * Cross-check every client read query against the rule-required scope fields.
  * @param {import('../types.mjs').RunContext} ctx
  * @param {string} rulesText
- * @returns {Array<{ file: string, pathKey: string, missing: string[], line: number }>}
+ * @returns {Array<{ file: string, pathKey: string, alternatives: string[][], line: number }>}
  */
 function crossCheckQueries(ctx, rulesText) {
   const scope = parseRulesScope(rulesText);
@@ -268,9 +285,9 @@ function crossCheckQueries(ctx, rulesText) {
 
   /** @type {Set<string>} */
   const files = new Set();
-  for (const target of ctx.targets) collectClientFiles(target, files);
+  for (const target of ctx.targets) collectClientFiles(target, ctx.repoRoot, files);
 
-  /** @type {Array<{ file: string, pathKey: string, missing: string[], line: number }>} */
+  /** @type {Array<{ file: string, pathKey: string, alternatives: string[][], line: number }>} */
   const mismatches = [];
   for (const abs of files) {
     const source = readFileSafely(abs);
@@ -279,10 +296,13 @@ function crossCheckQueries(ctx, rulesText) {
     for (const query of scanFirestoreQueries(source)) {
       if (!query.read) continue;
       const rule = matchScopeRule(scope, query.pathKey);
-      if (!rule || !rule.requiresAuth || rule.required.size === 0) continue;
-      const missing = [...rule.required].filter((field) => !query.whereFields.has(field));
-      if (missing.length > 0) {
-        mismatches.push({ file: repoFile, pathKey: query.pathKey, missing, line: query.line });
+      if (!rule || !rule.requiresAuth || rule.branches.length === 0) continue;
+      // A query satisfies the rule when it constrains by every field of at
+      // least one branch (an empty branch needs nothing - e.g. `uid()`-only).
+      const satisfied = rule.branches.some((branch) =>
+        branch.every((field) => query.whereFields.has(field)));
+      if (!satisfied) {
+        mismatches.push({ file: repoFile, pathKey: query.pathKey, alternatives: rule.branches, line: query.line });
       }
     }
   }
@@ -291,12 +311,16 @@ function crossCheckQueries(ctx, rulesText) {
 
 /**
  * "Client query does not constrain by the rule-required scope field" finding.
- * @param {{ file: string, pathKey: string, missing: string[], line: number }} mismatch
+ * @param {{ file: string, pathKey: string, alternatives: string[][], line: number }} mismatch
  * @returns {Finding}
  */
 function ruleQueryMismatchFinding(mismatch) {
-  const { file, pathKey, missing, line } = mismatch;
-  const fields = missing.join('`, `');
+  const { file, pathKey, alternatives, line } = mismatch;
+  const options = alternatives
+    .filter((branch) => branch.length > 0)
+    .map((branch) => branch.join('`, `'));
+  const description = options.length > 0 ? options.join('` OR `') : 'the rule-required scope';
+  const first = alternatives.find((branch) => branch.length > 0) ?? [];
   return {
     id: `firebase:rule-query-mismatch:${file}:${pathKey}`,
     kind: 'teardown',
@@ -307,8 +331,8 @@ function ruleQueryMismatchFinding(mismatch) {
     pillar: 'security',
     teardownId: TEARDOWN_ID,
     title: `Firestore query on \`${pathKey}\` misses the rule-required scope`,
-    message: `This read query on \`${pathKey}\` does not constrain by \`${fields}\`, which \`firestore.rules\` requires — the query fails permission checks (or would read across tenants if the rule were looser).`,
-    fixSummary: `Add \`where('${missing[0]}', '==', uid)\` to the query so it satisfies the rule, or route the read through an authenticated Cloud Function.`,
+    message: `This read query on \`${pathKey}\` does not constrain by \`${description}\`, which \`firestore.rules\` requires — the query fails permission checks (or would read across tenants if the rule were looser).`,
+    fixSummary: `Add \`where('${first[0]}', '==', uid)\` (or one of the rule's alternatives) to the query so it satisfies the rule, or route the read through an authenticated Cloud Function.`,
     source: { provider: 'firebase', ruleId: 'rule-query-mismatch' },
     dependency: null,
   };

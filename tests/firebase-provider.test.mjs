@@ -197,3 +197,171 @@ test('firebase provider flags a client query missing the rule-required scope', a
   assert.equal(mismatches[0]?.severity, 'high');
   assert.ok(String(mismatches[0]?.message).includes('ownerUid'));
 });
+
+test('parseRulesScope resolves helper functions: auth and scope fields in bodies', () => {
+  const scope = parseRulesScope(`
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function projectData(pid) { return get(/databases/$(database)/documents/projects/$(pid)).data; }
+    function canManageProjectData(p) {
+      return signedIn() && (p.get('ownerId', '') == uid() || uid() in p.get('admins', []));
+    }
+    match /projects/{projectId} {
+      allow read: if canManageProjectData(projectData(projectId));
+      allow write: if false;
+    }
+    // The same helper on another collection: auth yes, fields no (the fields
+    // belong to the projects doc, not the personnel doc).
+    match /projectPersonnel/{docId} {
+      allow read: if canManageProjectData(projectData(projectId));
+      allow write: if false;
+    }
+  }
+}
+`);
+  const projects = scope.get('projects');
+  assert.ok(projects, 'expected projects scope rule');
+  assert.equal(projects?.requiresAuth, true);
+  assert.equal(projects?.branches.length, 2, 'ownerId OR admins alternatives');
+  assert.ok(projects?.branches.some((b) => b.length === 1 && b[0] === 'ownerId'));
+  assert.ok(projects?.branches.some((b) => b.length === 1 && b[0] === 'admins'));
+  const personnel = scope.get('projectPersonnel');
+  assert.ok(personnel, 'expected projectPersonnel scope rule (auth-only)');
+  assert.equal(personnel?.requiresAuth, true);
+  assert.equal(personnel?.branches.every((b) => b.length === 0), true, 'no foreign-doc fields required');
+});
+
+test('parseRulesScope splits OR branches inside helper bodies (shoot-readable shape)', () => {
+  const scope = parseRulesScope(`
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function shootData(sid) { return get(/databases/$(database)/documents/shoots/$(sid)).data; }
+    function shootIsProjectLevel(s) {
+      return signedIn() && (s.get('projectOwnerId', '') == uid() || uid() in s.get('projectAdmins', []));
+    }
+    function isNamedShootAdmin(s) { return signedIn() && uid() in s.get('adminPermissions', {}); }
+    function isShootWriter(s) { return shootIsProjectLevel(s) || isNamedShootAdmin(s); }
+    function shootReadable(sid) {
+      let s = shootData(sid);
+      return isShootWriter(s) || (signedIn() && s.get('archived', false) == false);
+    }
+    match /shoots/{shootId} {
+      allow read: if shootReadable(shootId);
+      allow write: if false;
+    }
+  }
+}
+`);
+  const shoots = scope.get('shoots');
+  assert.ok(shoots, 'expected shoots scope rule');
+  assert.equal(shoots?.requiresAuth, true);
+  // Four alternatives: projectOwnerId | projectAdmins | adminPermissions | archived.
+  assert.equal(shoots?.branches.length, 4);
+  const sets = shoots?.branches.map((b) => [...b].sort().join(','));
+  assert.ok(sets?.includes('archived'), `expected an archived-only branch, got ${JSON.stringify(sets)}`);
+  assert.ok(sets?.includes('projectOwnerId'), `expected a projectOwnerId branch, got ${JSON.stringify(sets)}`);
+});
+
+test('firebase provider accepts a query satisfying any rule branch (archived filter)', async () => {
+  const findings = await runFixture((root) => {
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(
+      join(root, 'firestore.rules'),
+      "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function signedIn() { return request.auth != null; }\n    function uid() { return request.auth.uid; }\n    function shootData(sid) { return get(/databases/$(database)/documents/shoots/$(sid)).data; }\n    function shootIsProjectLevel(s) { return signedIn() && s.get('projectOwnerId', '') == uid(); }\n    function shootReadable(sid) { let s = shootData(sid); return shootIsProjectLevel(s) || (signedIn() && s.get('archived', false) == false); }\n    match /shoots/{shootId} {\n      allow read: if shootReadable(shootId);\n      allow write: if false;\n    }\n  }\n}\n",
+    );
+    writeFileSync(
+      join(root, 'src', 'queries.ts'),
+      "import { collection, getFirestore, onSnapshot, query, where } from 'firebase/firestore';\n" +
+        "const db = getFirestore();\n" +
+        "// viewer list: satisfies the archived branch\n" +
+        "onSnapshot(query(collection(db, 'shoots'), where('archived', '==', false)), () => {});\n" +
+        "// bare list: satisfies no branch\n" +
+        "onSnapshot(query(collection(db, 'shoots')), () => {});\n",
+    );
+  });
+  const mismatches = findings.filter((finding) => finding.source.ruleId === 'rule-query-mismatch');
+  assert.equal(mismatches.length, 1, 'expected only the bare list to mismatch');
+  assert.ok(String(mismatches[0]?.message).includes('archived'));
+  assert.ok(String(mismatches[0]?.message).includes('projectOwnerId'), 'message names the alternatives');
+});
+
+test('firebase provider checks every per-bucket storage rules file', async () => {
+  const findings = await runFixture((root) => {
+    writeFileSync(join(root, 'storage.rules'), 'service firebase.storage { match /b/{bucket}/o { match /{allPaths=**} { allow read: if request.auth != null; allow write: if false; } } }');
+    writeFileSync(join(root, 'storage.rvmedia.rules'), 'service firebase.storage { match /b/{bucket}/o { match /{allPaths=**} { allow read, write: if true; } } }');
+  });
+  const open = findings.filter((finding) => finding.source.ruleId === 'open-rules');
+  assert.equal(open.length, 1, 'expected one open-rules finding');
+  assert.equal(open[0]?.file, 'storage.rvmedia.rules', 'the open bucket is named');
+  assert.equal(open[0]?.severity, 'critical');
+});
+
+test('firebase provider flags client-side Storage usage with no rules in repo', async () => {
+  const findings = await runFixture((root) => {
+    mkdirSync(join(root, 'src'), { recursive: true });
+    writeFileSync(join(root, 'package.json'), JSON.stringify({ dependencies: { firebase: '^12' } }));
+    writeFileSync(
+      join(root, 'src', 'media.ts'),
+      "import { getStorage, ref, uploadBytes } from 'firebase/storage';\nexport const store = getStorage();\n",
+    );
+  });
+  const missing = findings.filter((finding) => finding.source.ruleId === 'missing-rules' && finding.file === 'storage.rules');
+  assert.equal(missing.length, 1, 'expected a storage missing-rules finding');
+  assert.equal(missing[0]?.severity, 'medium');
+  assert.equal(missing[0]?.teardownId, 'TD-008');
+});
+
+test('scanFirestoreQueries does not bleed into the next statement', () => {
+  const queries = scanFirestoreQueries(
+    "getDocs(collection(db, `shoots/${id}/shotlist`)),\n  getDoc(doc(db, 'projects', pid)),\n];\n",
+  );
+  const paths = queries.map((q) => q.pathKey);
+  assert.ok(paths.includes('shoots/*/shotlist'), `expected the shotlist path, got ${JSON.stringify(paths)}`);
+  assert.ok(!paths.some((p) => p.includes('projects')), 'next statement strings must not leak in');
+});
+
+test('a plain match does not govern subcollections; a **-rule does', () => {
+  const scope = parseRulesScope(`
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function uid() { return request.auth.uid; }
+    match /shoots/{shootId} {
+      allow read: if resource.data.get('ownerUid', '') == uid();
+    }
+    match /tenants/{tenantId}/{d=**} {
+      allow read: if resource.data.get('ownerUid', '') == uid();
+    }
+  }
+}
+`);
+  // `shoots/{id}/logs` is a deeper path - the shoots rule (no **) does not apply.
+  assert.equal(matchScopeRule(scope, 'shoots/x/logs'), null);
+  assert.equal(matchScopeRule(scope, 'shoots'), scope.get('shoots'));
+  // `tenants/...` recurses via {d=**}.
+  const tenantsRule = matchScopeRule(scope, 'tenants/x/anything/deep');
+  assert.equal(tenantsRule, scope.get('tenants'));
+});
+
+test('firebase provider ignores denied-shape test files in the cross-check', async () => {
+  const findings = await runFixture((root) => {
+    mkdirSync(join(root, 'scripts'), { recursive: true });
+    writeFileSync(
+      join(root, 'firestore.rules'),
+      "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function uid() { return request.auth.uid; }\n    match /rvFilms/{filmId} {\n      allow read: if resource.data.get('ownerUid', '') == uid();\n    }\n  }\n}\n",
+    );
+    // A rules-test style file deliberately runs the DENIED query shape.
+    writeFileSync(
+      join(root, 'scripts', 'rules-test.mjs'),
+      "import { collection, getFirestore, getDocs, query } from 'firebase/firestore';\nconst db = getFirestore();\nawait assertFails(getDocs(query(collection(db, 'rvFilms'))));\n",
+    );
+  });
+  const mismatches = findings.filter((finding) => finding.source.ruleId === 'rule-query-mismatch');
+  assert.equal(mismatches.length, 0, 'test-file queries are deliberate negative assertions');
+});
