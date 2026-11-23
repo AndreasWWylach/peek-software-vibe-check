@@ -9,7 +9,11 @@
       "points": null,
       "fixSummary": "Require auth, rate-limit per user, cap max_tokens, truncate input, use the cheapest model that fits the job, and set a provider-level spend alert.",
       "mappedQuestion": "Q2.2",
-      "languages": ["typescript", "javascript", "python"]
+      "languages": [
+        "typescript",
+        "javascript",
+        "python"
+      ]
     },
     {
       "id": "TD-008",
@@ -18,7 +22,12 @@
       "points": null,
       "fixSummary": "Scope every query to the authenticated tenant via a compound (id + organizationId) key — and return 404 for cross-tenant lookups so the resource's existence isn't leaked.",
       "mappedQuestion": "Q1.3",
-      "languages": ["typescript", "javascript", "python", "php"]
+      "languages": [
+        "typescript",
+        "javascript",
+        "python",
+        "php"
+      ]
     },
     {
       "id": "TD-016",
@@ -27,61 +36,12 @@
       "points": null,
       "fixSummary": "Move the secret to the server: create the PaymentIntent in a route handler using a server-only environment variable, and have the client call that endpoint — never ship the SDK or the key to the browser.",
       "mappedQuestion": "Q1.1",
-      "languages": ["typescript", "javascript", "python", "php"]
-    },
-    {
-      "id": "TD-032",
-      "pillar": "security",
-      "severity": "critical",
-      "points": null,
-      "fixSummary": "Register on wp_ajax_ (logged-in only), verify a nonce with check_ajax_referer(), authorize with current_user_can(), and take the identity from the session — never from the request body.",
-      "mappedQuestion": null,
-      "languages": ["typescript", "javascript", "python", "php"]
-    },
-    {
-      "id": "TD-033",
-      "pillar": "security",
-      "severity": "critical",
-      "points": null,
-      "fixSummary": "Pass the raw value as a %s placeholder argument — the escaping happens inside prepare(), not in the string. Never concatenate input before preparing.",
-      "mappedQuestion": null,
-      "languages": ["typescript", "javascript", "python", "php"]
-    },
-    {
-      "id": "TD-042",
-      "pillar": "security",
-      "severity": "critical",
-      "points": null,
-      "fixSummary": "Use execFile()/spawn() with an argument array — no shell, no metacharacter interpretation — and validate the filename against an allowlist before it reaches the command.",
-      "mappedQuestion": null,
-      "languages": ["typescript", "javascript", "python", "php"]
-    },
-    {
-      "id": "TD-045",
-      "pillar": "architecture",
-      "severity": "medium",
-      "points": null,
-      "fixSummary": "Define the provider's contract with a runtime schema (Zod) instead of any/@ts-ignore — a shape change then fails loudly at the boundary, not silently downstream.",
-      "mappedQuestion": null,
-      "languages": ["typescript"]
-    },
-    {
-      "id": "TD-046",
-      "pillar": "runtime",
-      "severity": "medium",
-      "points": null,
-      "fixSummary": "Catch the specific, retryable exception type — log it — and raise loudly when retries are exhausted. Never bare except, never pass.",
-      "mappedQuestion": null,
-      "languages": ["python"]
-    },
-    {
-      "id": "TD-021",
-      "pillar": "architecture",
-      "severity": "high",
-      "points": null,
-      "fixSummary": "Establish one core API client with runtime schema validation, and make every feature reuse it — one pattern, one source of truth, one place to add auth, retries, and logging.",
-      "mappedQuestion": "Q3.1",
-      "languages": ["javascript", "typescript"]
+      "languages": [
+        "typescript",
+        "javascript",
+        "python",
+        "php"
+      ]
     },
     {
       "id": "TD-019",
@@ -90,7 +50,86 @@
       "points": null,
       "fixSummary": "Split the feature into layers — a validation schema, a service for business logic, a repository for data access, and a thin UI — so each part is testable and replaceable on its own.",
       "mappedQuestion": "Q3.1",
-      "languages": ["typescript", "javascript"]
+      "languages": [
+        "typescript",
+        "javascript"
+      ]
+    },
+    {
+      "id": "TD-021",
+      "pillar": "architecture",
+      "severity": "high",
+      "points": null,
+      "fixSummary": "Establish one core API client with runtime schema validation, and make every feature reuse it — one pattern, one source of truth, one place to add auth, retries, and logging.",
+      "mappedQuestion": "Q3.1",
+      "languages": [
+        "javascript",
+        "typescript"
+      ]
+    },
+    {
+      "id": "TD-032",
+      "pillar": "security",
+      "severity": "critical",
+      "points": null,
+      "fixSummary": "Register on wp_ajax_ (logged-in only), verify a nonce with check_ajax_referer(), authorize with current_user_can(), and take the identity from the session — never from the request body.",
+      "mappedQuestion": null,
+      "languages": [
+        "typescript",
+        "javascript",
+        "python",
+        "php"
+      ]
+    },
+    {
+      "id": "TD-033",
+      "pillar": "security",
+      "severity": "critical",
+      "points": null,
+      "fixSummary": "Pass the raw value as a %s placeholder argument — the escaping happens inside prepare(), not in the string. Never concatenate input before preparing.",
+      "mappedQuestion": null,
+      "languages": [
+        "typescript",
+        "javascript",
+        "python",
+        "php"
+      ]
+    },
+    {
+      "id": "TD-042",
+      "pillar": "security",
+      "severity": "critical",
+      "points": null,
+      "fixSummary": "Use execFile()/spawn() with an argument array — no shell, no metacharacter interpretation — and validate the filename against an allowlist before it reaches the command.",
+      "mappedQuestion": null,
+      "languages": [
+        "typescript",
+        "javascript",
+        "python",
+        "php"
+      ]
+    },
+    {
+      "id": "TD-045",
+      "pillar": "architecture",
+      "severity": "medium",
+      "points": null,
+      "fixSummary": "Define the provider's contract with a runtime schema (Zod) instead of any/@ts-ignore — a shape change then fails loudly at the boundary, not silently downstream.",
+      "mappedQuestion": null,
+      "languages": [
+        "typescript"
+      ]
+    },
+    {
+      "id": "TD-046",
+      "pillar": "runtime",
+      "severity": "medium",
+      "points": null,
+      "fixSummary": "Catch the specific, retryable exception type — log it — and raise loudly when retries are exhausted. Never bare except, never pass.",
+      "mappedQuestion": null,
+      "languages": [
+        "python"
+      ]
     },
     {
       "id": "TD-050",
@@ -99,7 +138,11 @@
       "points": null,
       "fixSummary": "Verify the webhook signature before acting on it — Stripe: webhooks.constructEvent on the raw body; PayPal: POST /v1/notifications/verify-webhook-signature and require verification_status === SUCCESS.",
       "mappedQuestion": null,
-      "languages": ["typescript", "javascript", "python"]
+      "languages": [
+        "typescript",
+        "javascript",
+        "python"
+      ]
     },
     {
       "id": "TD-051",
@@ -108,7 +151,11 @@
       "points": null,
       "fixSummary": "Derive the entitlement from the provider-verified subscription/plan and write that — never a billing tier, plan id, or price id the client sent.",
       "mappedQuestion": null,
-      "languages": ["typescript", "javascript", "php"]
+      "languages": [
+        "typescript",
+        "javascript",
+        "php"
+      ]
     },
     {
       "id": "TD-052",
@@ -117,7 +164,10 @@
       "points": null,
       "fixSummary": "Keep reactive listeners read-only: update UI state in place from the snapshot, and perform writes only from user actions (or guard the write so it cannot re-trigger the listener).",
       "mappedQuestion": null,
-      "languages": ["typescript", "javascript"]
+      "languages": [
+        "typescript",
+        "javascript"
+      ]
     },
     {
       "id": "TD-054",
@@ -126,7 +176,10 @@
       "points": null,
       "fixSummary": "Surface the error, or return a discriminated result ({ ok: false, message }) so a failure is never read as a successful zero/empty state.",
       "mappedQuestion": null,
-      "languages": ["typescript", "javascript"]
+      "languages": [
+        "typescript",
+        "javascript"
+      ]
     },
     {
       "id": "TD-055",
@@ -135,7 +188,10 @@
       "points": null,
       "fixSummary": "Check the signature header is present before verifying — answer \"not a delivery\" quietly, and fail loudly only when a present signature is wrong.",
       "mappedQuestion": null,
-      "languages": ["typescript", "javascript"]
+      "languages": [
+        "typescript",
+        "javascript"
+      ]
     },
     {
       "id": "TD-057",
@@ -144,7 +200,12 @@
       "points": null,
       "fixSummary": "Fetch only allowlisted, known-safe hosts server-side — never pass a request-supplied URL straight to fetch/requests/file_get_contents — and for URLs that must stay user-controlled, force https and resolve/reject loopback, private-range, link-local and metadata (169.254.169.254) destinations before fetching.",
       "mappedQuestion": null,
-      "languages": ["typescript", "javascript", "python", "php"]
+      "languages": [
+        "typescript",
+        "javascript",
+        "python",
+        "php"
+      ]
     },
     {
       "id": "TD-058",
@@ -153,7 +214,24 @@
       "points": null,
       "fixSummary": "Hash passwords with bcrypt, Argon2 or scrypt and a per-password salt — never MD5, SHA-1 or unsalted SHA-256; they are designed to be fast, which is exactly what makes stored hashes crackable.",
       "mappedQuestion": null,
-      "languages": ["typescript", "javascript", "python", "php"]
+      "languages": [
+        "typescript",
+        "javascript",
+        "python",
+        "php"
+      ]
+    },
+    {
+      "id": "TD-059",
+      "pillar": "security",
+      "severity": "high",
+      "points": null,
+      "fixSummary": "Add a fileFilter (MIME allowlist) and size limits to the multer config so only intended file types ever touch disk.",
+      "mappedQuestion": null,
+      "languages": [
+        "typescript",
+        "javascript"
+      ]
     }
   ]
 }

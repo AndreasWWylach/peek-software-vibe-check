@@ -1,0 +1,55 @@
+# This file is part of vibe-check — the open-source, local deep-scan engine from peek.software (https://peek.software) that audits AI-generated SaaS apps.
+# SPDX-License-Identifier: Apache-2.0
+
+# TD-059 — Unvalidated file upload, JS/TS.
+#
+# The vulnerable shape: `multer({ ... })` configured with a destination but NO
+# `fileFilter` in the same config object — every uploaded file lands on disk
+# regardless of type. An attacker uploads a .php/.html/.svg payload and gets
+# storage the app never intended: stored XSS, or code execution when the
+# upload directory is served or executed. The type check must live INSIDE the
+# multer config — a content-type check elsewhere means the file was already
+# written before anyone looked at it.
+#
+# Scope: multer only in v1 (the dominant Express upload middleware). Flask and
+# PHP variants are deferred — pattern mode cannot see a mimetype guard that
+# sits on a different line than `.save()`, so shipping them would
+# false-positive on hardened code.
+rules:
+  - id: peek-td-059-unvalidated-file-upload-typescript
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: multer accepts any uploaded file - add a fileFilter (and limits) to the upload config.
+    metadata:
+      peek:
+        teardownId: TD-059
+        pillar: security
+        severity: high
+        title: File upload without a type filter
+        fixSummary: Add a fileFilter to the multer config that allowlists the accepted MIME types (plus limits for size) before files touch disk.
+      category: security
+    patterns:
+      - pattern: 'multer($ARGS)'
+      # Key-absence expressed as a regex: the args must NOT contain `fileFilter`
+      # anywhere. This catches block-bodied and expression-bodied filters alike
+      # (a `pattern-not` on `fileFilter: $F` cannot bind a block body).
+      - metavariable-regex:
+          metavariable: $ARGS
+          regex: '^(?![\s\S]*fileFilter)[\s\S]*$'
+  - id: peek-td-059-unvalidated-file-upload-zero-arg
+    languages:
+      - typescript
+      - javascript
+    severity: ERROR
+    message: multer accepts any uploaded file - add a fileFilter (and limits) to the upload config.
+    metadata:
+      peek:
+        teardownId: TD-059
+        pillar: security
+        severity: high
+        title: File upload without a type filter
+        fixSummary: Add a fileFilter to the multer config that allowlists the accepted MIME types (plus limits for size) before files touch disk.
+      category: security
+    pattern: 'multer()'
