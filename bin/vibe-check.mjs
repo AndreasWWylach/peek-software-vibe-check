@@ -26,7 +26,7 @@ Usage:
   vibe-check fix-prompts --report <peek-report.json> [--out <dir>]
   vibe-check probe <url> [--json] [--out <dir>]
   vibe-check doctor [--no-color]
-  vibe-check setup [--dry-run] [--yes] [--skip <tool>...] [--no-color]
+  vibe-check setup [--dry-run] [--yes] [--all] [--skip <tool>...] [--no-color]
   vibe-check --version
   vibe-check --help
 
@@ -38,6 +38,7 @@ Commands:
   probe        OPT-IN live check of a deployed URL you own (read-only, bounded).
   doctor       Read-only onboarding check — what's installed, missing, or outdated.
   setup        Interactive onboarding — install the missing tools, step by step.
+               Stack-aware: tools the detected stack does not need are auto-skipped.
 
 Options:
   --config <path>    Path to peek-config.json (required for run).
@@ -48,12 +49,13 @@ Options:
   --report <path>    Path to peek-report.json (required for fix-prompts).
   --dry-run          Print every planned install step without running anything.
   --yes              Accept all install steps without prompting.
+  --all              Consider every tool, even those the detected stack does not need.
   --skip <tool>      Skip a tool by id (repeatable): node semgrep osv-scanner madge scc gitleaks eslint.
   --no-color         Plain output (no ANSI colors).
   -v, --version      Print the engine version.
   -h, --help         Print this help.`;
 
-/** @typedef {{ command: 'help' } | { command: 'version' } | { command: 'run'; config: string; out: string | null; quiet: boolean; fixPrompts: boolean } | { command: 'fix-prompts'; report: string; out: string | null } | { command: 'probe'; target: string; json: boolean; out: string | null } | { command: 'doctor'; color: boolean } | { command: 'setup'; yes: boolean; dryRun: boolean; skip: string[]; color: boolean }} ParsedArgs */
+/** @typedef {{ command: 'help' } | { command: 'version' } | { command: 'run'; config: string; out: string | null; quiet: boolean; fixPrompts: boolean } | { command: 'fix-prompts'; report: string; out: string | null } | { command: 'probe'; target: string; json: boolean; out: string | null } | { command: 'doctor'; color: boolean } | { command: 'setup'; yes: boolean; dryRun: boolean; all: boolean; skip: string[]; color: boolean }} ParsedArgs */
 
 /**
  * Parse CLI arguments (minimal, dependency-free).
@@ -77,6 +79,7 @@ function parseArgs(argv) {
   if (command === 'setup') {
     let yes = false;
     let dryRun = false;
+    let all = false;
     /** @type {string[]} */
     const skip = [];
     let color = true;
@@ -84,6 +87,7 @@ function parseArgs(argv) {
       const arg = argv[i];
       if (arg === '--yes') yes = true;
       else if (arg === '--dry-run') dryRun = true;
+      else if (arg === '--all') all = true;
       else if (arg === '--no-color') color = false;
       else if (arg === '--skip') {
         const value = argv[++i];
@@ -95,7 +99,7 @@ function parseArgs(argv) {
         throw new Error(`Unknown flag "${arg}". Run "vibe-check --help".`);
       }
     }
-    return { command: 'setup', yes, dryRun, skip, color };
+    return { command: 'setup', yes, dryRun, all, skip, color };
   }
 
   if (command === 'run') {
@@ -168,11 +172,18 @@ async function main() {
     return;
   }
   if (parsed.command === 'doctor') {
-    doctor({ color: parsed.color });
+    doctor({ color: parsed.color, repoRoot: process.cwd() });
     return;
   }
   if (parsed.command === 'setup') {
-    await runOnboarding({ yes: parsed.yes, dryRun: parsed.dryRun, skip: parsed.skip, color: parsed.color });
+    await runOnboarding({
+      yes: parsed.yes,
+      dryRun: parsed.dryRun,
+      all: parsed.all,
+      skip: parsed.skip,
+      color: parsed.color,
+      repoRoot: process.cwd(),
+    });
     return;
   }
 

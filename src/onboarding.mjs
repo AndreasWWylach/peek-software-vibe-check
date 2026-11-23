@@ -17,12 +17,13 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { IGNORED_DIRS } from './ignore.mjs';
 import { ENGINE_NAME, ENGINE_VERSION } from './version.mjs';
 
 /** @typedef {import('./types.mjs').Severity} Severity */
@@ -308,6 +309,98 @@ export const TOOLS = [
 ];
 
 /**
+ * Stack markers of the repo onboarding runs in (bounded walk).
+ * @typedef {Object} StackNeeds
+ * @property {boolean} anyStack — did any language/container marker show up?
+ * @property {boolean} js — package.json present.
+ * @property {boolean} python — requirements.txt / pyproject.toml / setup.py / Pipfile.
+ * @property {boolean} php — composer.json.
+ * @property {boolean} go — go.mod.
+ * @property {boolean} docker — any Dockerfile*.
+ * @property {boolean} iac — Dockerfile* / docker-compose* / *.tf.
+ * @property {boolean} lockfile — any dependency lockfile.
+ */
+
+/**
+ * Detect the repo's stack markers with a bounded walk (names only, no content).
+ * Used to install only what THIS repo's stack needs. An empty/foreign
+ * directory yields `anyStack: false` — then every tool stays a candidate.
+ * @param {string} repoRoot
+ * @returns {StackNeeds}
+ */
+export function detectStackNeeds(repoRoot) {
+  /** @type {Set<string>} */
+  const names = new Set();
+  collectNames(repoRoot, names, 0);
+  const js = names.has('package.json');
+  const python = ['requirements.txt', 'pyproject.toml', 'setup.py', 'Pipfile'].some((n) => names.has(n));
+  const php = names.has('composer.json');
+  const go = names.has('go.mod');
+  const docker = [...names].some((n) => n.startsWith('Dockerfile'));
+  const iac = docker || [...names].some((n) => n.startsWith('docker-compose') || n.endsWith('.tf'));
+  const lockfile = [
+    'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+    'requirements.txt', 'poetry.lock', 'Pipfile.lock',
+    'composer.lock', 'go.sum', 'Cargo.lock', 'Gemfile.lock',
+  ].some((n) => names.has(n));
+  return {
+    anyStack: js || python || php || go || docker,
+    js, python, php, go, docker, iac, lockfile,
+  };
+}
+
+/**
+ * Does THIS repo's stack actually need this tool? Engine-agnostic: a tool that
+ * never matches this repo's stack is pure dead weight — skip installing it.
+ * @param {string} toolId
+ * @param {StackNeeds} stack
+ * @returns {{ needed: boolean; reason: string }}
+ */
+export function toolNeed(toolId, stack) {
+  switch (toolId) {
+    case 'madge':
+    case 'eslint':
+      return { needed: stack.js, reason: 'no package.json — not a JS/TS repo' };
+    case 'bandit':
+      return { needed: stack.python, reason: 'no Python manifest detected' };
+    case 'phpstan':
+      return { needed: stack.php, reason: 'no composer.json — not a PHP repo' };
+    case 'gosec':
+      return { needed: stack.go, reason: 'no go.mod — not a Go repo' };
+    case 'checkov':
+      return { needed: stack.iac, reason: 'no Dockerfile/compose/Terraform detected' };
+    case 'hadolint':
+      return { needed: stack.docker, reason: 'no Dockerfile detected' };
+    case 'trivy':
+      return { needed: stack.lockfile || stack.docker, reason: 'no lockfile or Dockerfile detected' };
+    default:
+      // node, semgrep, osv-scanner, scc, gitleaks — the engine core, always.
+      return { needed: true, reason: '' };
+  }
+}
+
+/** Bounded name collection (cap 5000 files; skips ignored dirs + symlinks).
+ * @param {string} dir
+ * @param {Set<string>} names
+ * @param {number} depth */
+function collectNames(dir, names, depth) {
+  if (names.size >= 5000 || depth > 6) return;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.isSymbolicLink()) continue;
+    names.add(entry.name);
+    if (entry.isDirectory() && !IGNORED_DIRS.has(entry.name)) {
+      collectNames(join(dir, entry.name), names, depth + 1);
+    }
+  }
+}
+
+/**
  * Extract the first `x.y.z` triple from a version string (or null).
  * @param {string} text
  * @returns {Semver | null}
@@ -487,24 +580,39 @@ export function runCommandInstall(command, log) {
 }
 
 /**
- * Print the doctor report (read-only).
- * @param {{ color?: boolean }} [options]
+ * Print the doctor report (read-only). Annotates tools THIS repo's stack
+ * does not need (e.g. phpstan on a JS-only repo).
+ * @param {{ color?: boolean; repoRoot?: string }} [options]
  * @returns {CheckResult[]}
  */
 export function doctor(options = {}) {
   const color = options.color ?? true;
+  const repoRoot = options.repoRoot ?? process.cwd();
+  const stack = detectStackNeeds(repoRoot);
   /** @param {string} code @param {string} s @returns {string} */
   const paint = (code, s) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
   const results = checkAll();
 
   console.log(`${ENGINE_NAME} ${ENGINE_VERSION} — onboarding check`);
+  if (stack.anyStack) {
+    const tags = [
+      stack.js ? 'JS/TS' : '',
+      stack.python ? 'Python' : '',
+      stack.php ? 'PHP' : '',
+      stack.go ? 'Go' : '',
+      stack.docker ? 'Docker' : '',
+    ].filter(Boolean);
+    console.log(`stack detected: ${tags.join(' · ')}`);
+  }
   console.log('');
   for (const result of results) {
     const mark =
       result.status === 'ok' ? paint('32', 'ok') : result.status === 'outdated' ? paint('33', 'outdated') : paint('31', 'missing');
     const version = result.version ?? '—';
     const flag = result.required ? '' : paint('90', ' (optional)');
-    console.log(`  ${mark.padEnd(color ? 15 : 9)}  ${result.name.padEnd(12)} ${version.padEnd(10)} ${result.role}${flag}`);
+    const need = toolNeed(result.id, stack);
+    const needNote = !need.needed && stack.anyStack ? paint('90', ` (not needed here: ${need.reason})`) : '';
+    console.log(`  ${mark.padEnd(color ? 15 : 9)}  ${result.name.padEnd(12)} ${version.padEnd(10)} ${result.role}${flag}${needNote}`);
   }
   console.log('');
   const missing = results.filter((r) => r.status !== 'ok').length;
@@ -534,30 +642,64 @@ export function doctor(options = {}) {
 
 /**
  * Interactive onboarding (setup). Shows every step, asks, then installs.
- * @param {{ yes?: boolean; dryRun?: boolean; skip?: string[]; color?: boolean }} [options]
+ * Stack-aware: tools THIS repo's stack does not need are auto-skipped (with a
+ * printed reason) unless `all` is set — install only what the scan will use.
+ * @param {{ yes?: boolean; dryRun?: boolean; skip?: string[]; color?: boolean; all?: boolean; repoRoot?: string }} [options]
  * @returns {Promise<void>}
  */
 export async function runOnboarding(options = {}) {
-  const { yes = false, dryRun = false, skip = [], color = true } = options;
+  const { yes = false, dryRun = false, skip = [], color = true, all = false } = options;
+  const repoRoot = options.repoRoot ?? process.cwd();
+  const stack = detectStackNeeds(repoRoot);
   /** @param {string} code @param {string} s @returns {string} */
   const paint = (code, s) => (color ? `\x1b[${code}m${s}\x1b[0m` : s);
   const packageManager = detectPackageManager();
 
   console.log(`${ENGINE_NAME} ${ENGINE_VERSION} — onboarding`);
   console.log('Everything shown here is installed from official sources; commands print before they run.');
+  if (stack.anyStack) {
+    const tags = [
+      stack.js ? 'JS/TS' : '',
+      stack.python ? 'Python' : '',
+      stack.php ? 'PHP' : '',
+      stack.go ? 'Go' : '',
+      stack.docker ? 'Docker' : '',
+    ].filter(Boolean);
+    console.log(`Stack detected: ${tags.join(' · ')} — tools this stack does not need are auto-skipped (override with --all).`);
+  } else if (!all) {
+    console.log('No language/container stack detected here — every tool stays a candidate.');
+  }
   console.log('');
 
   const results = checkAll();
   const steps = planSteps(results, { skip });
 
-  if (steps.length === 0) {
+  // Stack gate: auto-skip tools the detected stack cannot use.
+  /** @type {InstallStep[]} */
+  const active = [];
+  /** @type {InstallStep[]} */
+  const stackSkipped = [];
+  for (const step of steps) {
+    if (!all && stack.anyStack && !toolNeed(step.tool.id, stack).needed) {
+      stackSkipped.push(step);
+    } else {
+      active.push(step);
+    }
+  }
+  for (const step of stackSkipped) {
+    const need = toolNeed(step.tool.id, stack);
+    console.log(`${paint('90', '▸')} ${step.tool.name} — skipped: ${need.reason} (not needed for this stack)`);
+  }
+  if (stackSkipped.length > 0) console.log('');
+
+  if (active.length === 0) {
     console.log(paint('32', 'All prerequisites satisfied — you are ready to run a scan.'));
     return;
   }
 
   if (dryRun) {
     console.log('Dry run — nothing will be installed. Planned steps:');
-    for (const step of steps) {
+    for (const step of active) {
       printStep(step, packageManager, paint);
     }
     console.log('');
@@ -571,7 +713,7 @@ export async function runOnboarding(options = {}) {
   let quit = false;
   const rl = createInterface({ input: stdin, output: stdout });
 
-  for (const step of steps) {
+  for (const step of active) {
     if (quit) break;
 
     printStep(step, packageManager, paint);

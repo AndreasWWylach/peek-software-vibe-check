@@ -9,6 +9,9 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   TOOLS,
   extractVersionTriple,
@@ -16,6 +19,8 @@ import {
   checkTool,
   planSteps,
   commandFor,
+  detectStackNeeds,
+  toolNeed,
 } from '../src/onboarding.mjs';
 
 test('extractVersionTriple parses the tool version formats we shell out to', () => {
@@ -85,4 +90,63 @@ test('semgrep install tries pipx, then pip, then bootstraps pip via get-pip.py',
   assert.ok(command.includes('python3 -m pip install --user semgrep'), 'python3 -m pip fallback present');
   assert.ok(command.includes('bootstrap.pypa.io/get-pip.py'), 'bootstraps pip via the official get-pip.py');
   assert.ok(command.includes('exit 1'), 'fails loudly when no Python/pip exists');
+});
+
+test('detectStackNeeds sees the JS/Docker stack of a repo', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vibe-check-stack-'));
+  try {
+    writeFileSync(join(dir, 'package.json'), '{}');
+    mkdirSync(join(dir, 'deploy'));
+    writeFileSync(join(dir, 'deploy', 'Dockerfile'), 'FROM node:22');
+    const stack = detectStackNeeds(dir);
+    assert.equal(stack.anyStack, true);
+    assert.equal(stack.js, true);
+    assert.equal(stack.docker, true);
+    assert.equal(stack.iac, true);
+    assert.equal(stack.python, false);
+    assert.equal(stack.php, false);
+    assert.equal(stack.go, false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('detectStackNeeds reports anyStack=false for an empty directory', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vibe-check-stack-'));
+  try {
+    assert.equal(detectStackNeeds(dir).anyStack, false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('toolNeed maps tools to stack markers', () => {
+  const empty = detectStackNeeds('/nonexistent');
+  /** @type {import('../src/onboarding.mjs').StackNeeds} */
+  const jsStack = { ...empty, anyStack: true, js: true };
+  /** @type {import('../src/onboarding.mjs').StackNeeds} */
+  const pyStack = { ...empty, anyStack: true, python: true };
+  /** @type {import('../src/onboarding.mjs').StackNeeds} */
+  const phpStack = { ...empty, anyStack: true, php: true };
+  /** @type {import('../src/onboarding.mjs').StackNeeds} */
+  const goStack = { ...empty, anyStack: true, go: true };
+
+  assert.equal(toolNeed('eslint', jsStack).needed, true);
+  assert.equal(toolNeed('madge', jsStack).needed, true);
+  assert.equal(toolNeed('bandit', pyStack).needed, true);
+  assert.equal(toolNeed('phpstan', phpStack).needed, true);
+  assert.equal(toolNeed('gosec', goStack).needed, true);
+  assert.equal(toolNeed('hadolint', { ...jsStack, docker: true }).needed, true);
+  assert.equal(toolNeed('checkov', { ...jsStack, iac: true }).needed, true);
+
+  assert.equal(toolNeed('eslint', pyStack).needed, false); // no JS
+  assert.equal(toolNeed('bandit', jsStack).needed, false); // no Python
+  assert.equal(toolNeed('phpstan', jsStack).needed, false); // no PHP
+  assert.equal(toolNeed('gosec', jsStack).needed, false); // no Go
+  assert.equal(toolNeed('hadolint', jsStack).needed, false); // no Dockerfile
+
+  // The engine core is always needed.
+  for (const id of ['node', 'semgrep', 'osv-scanner', 'scc', 'gitleaks']) {
+    assert.equal(toolNeed(id, jsStack).needed, true, id);
+  }
 });

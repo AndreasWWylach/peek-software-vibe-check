@@ -80,7 +80,9 @@ here is written from scratch, per the no-copying rule):
    (`src/claim-check.mjs`) and contradicts claims the scan disproves — the
    agent's word is checked, never taken on faith.
 4. **Stack-aware onboarding** — install only the binaries the detected stack
-   needs (skip phpstan for a JS-only repo, etc.).
+   needs (skip phpstan for a JS-only repo, etc.). SHIPPED 2026-11-23:
+   `vibe-check setup`/`doctor` detect the repo's stack and auto-skip
+   irrelevant tools (with printed reasons); `--all` restores the full list.
 5. **Deliberately NOT adopting** — 2,200-rule mega-rulepacks (noise over
    precision) and hosted repo scanning (upload) — both against the trust
    model.

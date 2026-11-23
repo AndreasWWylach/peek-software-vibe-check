@@ -13,7 +13,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 3. **Inert config.** `peek-config.json` is schema-validated data — never executed code.
 4. **Open & reviewable.** Apache-2.0. No hidden actions.
 
-## Prerequisites
+## Prerequisites (depending on your stack)
 
 - Node.js ≥ 22
 - [semgrep](https://semgrep.dev) — custom teardown rules (core)
@@ -70,8 +70,14 @@ vibe-check doctor                 # read-only: what's installed / missing / outd
 vibe-check setup                  # interactive installer (y/n/skip per tool)
 vibe-check setup --dry-run        # print every planned step, install nothing
 vibe-check setup --yes            # non-interactive (accept everything)
+vibe-check setup --all            # consider every tool, even those this stack does not need
 vibe-check setup --skip madge     # skip a tool
 ```
+
+`setup` is **stack-aware**: it detects the repo you run it in (package.json,
+Python manifests, composer.json, go.mod, Dockerfiles) and auto-skips tools the
+stack cannot use — a JS-only repo won't be offered phpstan, a Python repo won't
+be offered eslint. Override with `--all`.
 
 Or bootstrap everything from a shell (checks Node ≥ 22, clones the engine,
 installs its dependency, puts `vibe-check` on PATH, then runs the onboarding):
