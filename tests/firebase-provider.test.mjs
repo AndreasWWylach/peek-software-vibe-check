@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { firebaseProvider, isOpenRules, requiresAuth } from '../src/providers/firebase.mjs';
-import { parseRulesScope, scanFirestoreQueries, matchScopeRule } from '../src/firestore/scope.mjs';
+import { parseRulesScope, scanFirestoreQueries, scanFirestoreWrites, matchScopeRule } from '../src/firestore/scope.mjs';
 
 /** Run the provider against a temp repo whose content is built by `setup`.
  * @param {(root: string) => void} setup
@@ -156,8 +156,10 @@ service cloud.firestore {
   assert.ok(assets, 'expected rvFilms/assets scope rule');
   assert.equal(assets?.requiresAuth, true);
   assert.ok(assets?.required.has('ownerUid'));
-  // rvScreenings has a public (no-auth) read → no blanket scope rule.
-  assert.equal(scope.has('rvScreenings'), false);
+  // rvScreenings has a public (no-auth) read → no blanket READ scope to enforce,
+  // but the block still carries its write state (denied) for the write check.
+  assert.equal(scope.get('rvScreenings')?.requiresAuth, false);
+  assert.equal(scope.get('rvScreenings')?.writesDenied, true);
 });
 
 test('scanFirestoreQueries extracts path key, where fields, and read-ness', () => {
@@ -322,7 +324,7 @@ test('scanFirestoreQueries does not bleed into the next statement', () => {
     "getDocs(collection(db, `shoots/${id}/shotlist`)),\n  getDoc(doc(db, 'projects', pid)),\n];\n",
   );
   const paths = queries.map((q) => q.pathKey);
-  assert.ok(paths.includes('shoots/*/shotlist'), `expected the shotlist path, got ${JSON.stringify(paths)}`);
+  assert.ok(paths.includes('shoots/shotlist'), `expected the shotlist path, got ${JSON.stringify(paths)}`);
   assert.ok(!paths.some((p) => p.includes('projects')), 'next statement strings must not leak in');
 });
 
@@ -364,4 +366,75 @@ test('firebase provider ignores denied-shape test files in the cross-check', asy
   });
   const mismatches = findings.filter((finding) => finding.source.ruleId === 'rule-query-mismatch');
   assert.equal(mismatches.length, 0, 'test-file queries are deliberate negative assertions');
+});
+
+test('parseRulesScope records rules-denied writes per match block', () => {
+  const scope = parseRulesScope(`
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    match /rvLedger/{entryId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /rvOrders/{orderId} {
+      allow read: if signedIn();
+    }
+    match /rvProfiles/{uid} {
+      allow read: if signedIn();
+      allow create: if signedIn() && uid == request.auth.uid;
+    }
+  }
+}
+`);
+  assert.equal(scope.get('rvLedger')?.writesDenied, true, 'if false denies');
+  assert.equal(scope.get('rvOrders')?.writesDenied, true, 'no write rule = deny by default');
+  assert.equal(scope.get('rvProfiles')?.writesDenied, false, 'real create allow');
+});
+
+test('scanFirestoreWrites finds write paths and skips reads', () => {
+  const writes = scanFirestoreWrites(
+    "setDoc(doc(getDb(), 'rvLedger', entryId), data);\n" +
+      "await updateDoc(doc(getDb(), 'rvOrders', oid), { status: 'x' });\n" +
+      "await addDoc(collection(getDb(), 'rvProfiles'), data);\n" +
+      "deleteDoc(doc(getDb(), `rvTickets/${id}`), x);\n" +
+      "getDoc(doc(getDb(), 'rvFilms', fid));\n",
+  );
+  const paths = writes.map((w) => w.pathKey);
+  assert.ok(paths.includes('rvLedger'), `rvLedger collection path, got ${JSON.stringify(paths)}`);
+  assert.ok(paths.includes('rvOrders'));
+  assert.ok(paths.includes('rvProfiles'));
+  assert.ok(paths.includes('rvTickets'), 'template doc id normalized away');
+  assert.equal(paths.filter((p) => p.includes('rvFilms')).length, 0, 'reads are not writes');
+});
+
+test('firebase provider flags client writes to rules-denied collections', async () => {
+  const findings = await runFixture((root) => {
+    mkdirSync(join(root, 'src'), { recursive: true });
+    mkdirSync(join(root, 'functions'), { recursive: true });
+    writeFileSync(
+      join(root, 'firestore.rules'),
+      "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    function signedIn() { return request.auth != null; }\n    match /rvLedger/{entryId} {\n      allow read: if signedIn();\n      allow write: if false;\n    }\n    match /rvProfiles/{uid} {\n      allow read: if signedIn();\n      allow create: if signedIn();\n    }\n  }\n}\n",
+    );
+    writeFileSync(
+      join(root, 'src', 'client.ts'),
+      "import { doc, getFirestore, setDoc } from 'firebase/firestore';\n" +
+        "const db = getFirestore();\n" +
+        "setDoc(doc(db, 'rvLedger', 'l1'), { amount: 1 });\n" +
+        "setDoc(doc(db, 'rvProfiles', 'p1'), { name: 'x' });\n",
+    );
+    // Server-side Admin SDK writes bypass rules - never flagged.
+    writeFileSync(
+      join(root, 'functions', 'index.ts'),
+      "import { getFirestore } from 'firebase-admin/firestore';\n" +
+        "export const fn = () => getFirestore().collection('rvLedger').doc('l1').set({ amount: 1 });\n",
+    );
+  });
+  const denied = findings.filter((finding) => finding.source.ruleId === 'write-denied');
+  assert.equal(denied.length, 1, 'only the rvLedger client write is denied');
+  assert.equal(denied[0]?.file, 'src/client.ts');
+  assert.equal(denied[0]?.severity, 'high');
+  assert.equal(denied[0]?.teardownId, 'TD-008');
+  assert.ok(String(denied[0]?.message).includes('rvLedger'));
 });

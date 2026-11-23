@@ -27,14 +27,15 @@
  * @property {boolean} requiresAuth - every read rule references `request.auth` / `uid()`.
  * @property {boolean} recursive - the match path ends in `{...=**}` and governs subpaths.
  * @property {boolean} leadingRecursive - the first path segment is `{...=**}` (governs paths ABOVE its key).
+ * @property {boolean} writesDenied - no write allow with a real condition (client writes fail here).
  */
 
 /** @typedef {Map<string, FirestoreScopeRule>} RulesScope */
-/** @typedef {{ path: string, readLines: string[] }} MatchBlock */
+/** @typedef {{ path: string, readLines: string[], writeLines: string[] }} MatchBlock */
 /** @typedef {Map<string, string>} HelperMap */
 
 /**
- * @typedef {{ kind: 'match' | 'function', path: string, name: string, openDepth: number, lines: string[], openAllow: boolean }} BlockEntry
+ * @typedef {{ kind: 'match' | 'function', path: string, name: string, openDepth: number, lines: string[], writeLines: string[], openAllow: boolean, openWrite: boolean }} BlockEntry
  */
 
 const MAX_HELPER_DEPTH = 5;
@@ -52,15 +53,36 @@ export function parseRulesScope(text) {
   const scope = new Map();
   for (const block of matches) {
     const collection = blockCollection(block.path);
-    const rule = toScopeRule(block.readLines, helpers, collection);
-    if (rule) {
-      const pathSegments = segmentsAfterDocuments(block.path);
-      rule.recursive = pathSegments.some((segment) => segment.includes('=**'));
-      rule.leadingRecursive = (pathSegments[0] ?? '').includes('=**');
-      scope.set(pathKey(block.path), rule);
+    let rule = toScopeRule(block.readLines, helpers, collection);
+    if (!rule) {
+      if (block.writeLines.length === 0) continue; // nothing checkable in this block
+      rule = {
+        required: new Set(),
+        branches: [[]],
+        requiresAuth: false,
+        recursive: false,
+        leadingRecursive: false,
+        writesDenied: false,
+      };
     }
+    const pathSegments = segmentsAfterDocuments(block.path);
+    rule.recursive = pathSegments.some((segment) => segment.includes('=**'));
+    rule.leadingRecursive = (pathSegments[0] ?? '').includes('=**');
+    rule.writesDenied = writesDeniedFor(block.writeLines);
+    scope.set(pathKey(block.path), rule);
   }
   return scope;
+}
+
+/**
+ * Are client writes denied for a match block? Deny-by-default: no write lines,
+ * or every write line is `if false`.
+ * @param {string[]} writeLines
+ * @returns {boolean}
+ */
+export function writesDeniedFor(writeLines) {
+  if (writeLines.length === 0) return true;
+  return writeLines.every((line) => /\bif\s+false\b/.test(line));
 }
 
 /**
@@ -93,13 +115,19 @@ export function parseRuleBlocks(text) {
         name: '',
         openDepth: depth,
         lines: [],
+        writeLines: [],
         openAllow: false,
+        openWrite: false,
       });
       // A single-line match (`match /x/{id} { allow read: if ...; }`) - capture
-      // the content after the opening brace when it is a read grant.
+      // the content after the opening brace when it is an allow grant.
       const openIdx = line.indexOf('{');
       const rest = line.slice(openIdx + 1).replace(/\}\s*$/, '');
-      if (rest.trim() && /^allow\s+(?:read|get|list)\b/.test(rest.trim())) entry.lines.push(rest.trim());
+      if (rest.trim() && /^allow\s+(?:read|get|list)\b/.test(rest.trim())) {
+        entry.lines.push(rest.trim());
+      } else if (rest.trim() && /^allow\s+[^;]*\b(?:write|create|update|delete)\b/.test(rest.trim())) {
+        entry.writeLines.push(rest.trim());
+      }
       stack.push(entry);
     } else if (fn) {
       const entry = /** @type {BlockEntry} */ ({
@@ -108,7 +136,9 @@ export function parseRuleBlocks(text) {
         name: fn[1],
         openDepth: depth,
         lines: [],
+        writeLines: [],
         openAllow: false,
+        openWrite: false,
       });
       // Single-line function body - capture the content after the opening brace.
       const openIdx = line.indexOf('{');
@@ -120,10 +150,20 @@ export function parseRuleBlocks(text) {
       if (/^allow\s+(?:read|get|list)\b/.test(trimmed)) {
         top.lines.push(trimmed);
         top.openAllow = !/;\s*$/.test(trimmed);
+        top.openWrite = false;
+      } else if (/^allow\s+[^;]*\b(?:write|create|update|delete)\b/.test(trimmed)) {
+        top.writeLines.push(trimmed);
+        top.openAllow = !/;\s*$/.test(trimmed);
+        top.openWrite = true;
       } else if (top.openAllow) {
         // Multiline condition continuation (`|| ...` / `&& ...` lines).
-        top.lines[top.lines.length - 1] += ` ${trimmed}`;
-        top.openAllow = !/;\s*$/.test(top.lines[top.lines.length - 1]);
+        if (top.openWrite) {
+          top.writeLines[top.writeLines.length - 1] += ` ${trimmed}`;
+          top.openAllow = !/;\s*$/.test(top.writeLines[top.writeLines.length - 1]);
+        } else {
+          top.lines[top.lines.length - 1] += ` ${trimmed}`;
+          top.openAllow = !/;\s*$/.test(top.lines[top.lines.length - 1]);
+        }
       }
     } else if (stack.length > 0 && stack[stack.length - 1].kind === 'function') {
       stack[stack.length - 1].lines.push(line);
@@ -135,7 +175,7 @@ export function parseRuleBlocks(text) {
       const block = stack.pop();
       if (!block) continue;
       if (block.kind === 'match') {
-        matches.push({ path: block.path, readLines: block.lines });
+        matches.push({ path: block.path, readLines: block.lines, writeLines: block.writeLines });
       } else {
         // Drop the closing-brace line captured in the body.
         const body = block.lines.filter((l) => !/^\s*\}\s*$/.test(l)).join('\n');
@@ -198,6 +238,7 @@ function toScopeRule(readLines, helpers, collection) {
     requiresAuth: true,
     recursive: false,
     leadingRecursive: false,
+    writesDenied: false,
   };
 }
 
@@ -633,26 +674,8 @@ export function scanFirestoreQueries(source) {
 
     // Path segments = the string literals inside the collection(...) call,
     // bounded by its own closing paren (never the next statement's strings).
-    // Template literals (`shoots/${id}/logs`) contribute their static parts.
     const args = balancedCallArgs(source, start);
-    const segments = [];
-    const segRe = /'([^']+)'/g;
-    let sm;
-    while ((sm = segRe.exec(args))) segments.push(sm[1]);
-    const templateRe = /`([^`]*)`/g;
-    let tm;
-    while ((tm = templateRe.exec(args))) {
-      const parts = tm[1].split(/\$\{[^}]*\}/);
-      for (let pi = 0; pi < parts.length; pi += 1) {
-        for (const seg of parts[pi].split('/')) {
-          if (seg) segments.push(seg);
-        }
-        // A `${...}` interpolation is a dynamic segment - keep its depth so a
-        // flattened `shoots/${id}/logs` (`shoots/*/logs`) never equals the
-        // plain `shoots` match.
-        if (pi < parts.length - 1) segments.push('*');
-      }
-    }
+    const segments = pathSegmentsFromArgs(args);
 
     // `where(...)` fields belong to the enclosing query() call - look after
     // the collection call closes, up to the next `;`.
@@ -678,6 +701,163 @@ export function scanFirestoreQueries(source) {
     });
   }
   return queries;
+}
+
+/** @typedef {{ pathKey: string, line: number }} FirestoreWrite */
+
+/**
+ * Find client SDK write calls (setDoc/updateDoc/deleteDoc/addDoc) and the
+ * collection path they target.
+ * @param {string} source
+ * @returns {FirestoreWrite[]}
+ */
+export function scanFirestoreWrites(source) {
+  /** @type {FirestoreWrite[]} */
+  const writes = [];
+  const writeRe = /\b(setDoc|updateDoc|deleteDoc|addDoc)\s*\(/g;
+  let m;
+  while ((m = writeRe.exec(source))) {
+    const start = m.index + m[0].length;
+    const args = balancedCallArgs(source, start);
+    // The path is inside the first doc(...)/collection(...) argument.
+    const inner = firstCallArgs(args, ['doc', 'collection']);
+    const segments = pathSegmentsFromArgs(inner);
+    if (segments.length === 0) continue;
+    writes.push({
+      pathKey: segments.join('/'),
+      line: source.slice(0, m.index).split('\n').length,
+    });
+  }
+  return writes;
+}
+
+/**
+ * The balanced argument slice of the first named call in `text`.
+ * @param {string} text
+ * @param {string[]} names
+ * @returns {string}
+ */
+function firstCallArgs(text, names) {
+  for (const name of names) {
+    const idx = text.indexOf(`${name}(`);
+    if (idx >= 0) return balancedCallArgs(text, idx + name.length + 1);
+  }
+  return '';
+}
+
+/**
+ * Literal collection path from call arguments, positionally reconstructed:
+ * the first argument is the store reference (dropped unless it is a literal),
+ * each remaining argument is one path segment - a string literal, the static
+ * parts of a template literal (interpolations become `*`), or `*` for any
+ * other expression. Even positions (1-based) are doc ids and are normalized
+ * away, so `doc(db, 'rvProfiles', 'p1')` and `collection(db, 'rvFilms',
+ * filmId, 'assets')` both yield the collection path.
+ * @param {string} args
+ * @returns {string[]}
+ */
+export function pathSegmentsFromArgs(args) {
+  const tokens = splitTopLevelArgs(args);
+  if (tokens.length === 0) return [];
+  // Drop the store reference unless the call is the old single-arg SDK form.
+  const start = tokens.length > 1 && !/^['"`]/.test(tokens[0].trim()) ? 1 : 0;
+  /** @type {string[]} */
+  const raw = [];
+  for (let i = start; i < tokens.length; i += 1) {
+    const token = tokens[i].trim();
+    const literal = /^'([^']*)'$/.exec(token);
+    const template = /^`([^`]*)`$/.exec(token);
+    if (literal) {
+      raw.push(literal[1]);
+    } else if (template) {
+      // Expand the template into path POSITIONS: split on top-level slashes;
+      // a piece containing an interpolation is one dynamic position (`*`).
+      for (const piece of splitTopLevelSlash(template[1])) {
+        if (piece) raw.push(piece.includes('${') ? '*' : piece);
+      }
+    } else {
+      raw.push('*');
+    }
+  }
+  // Even 1-based positions are doc ids - drop them so collection keys align.
+  return raw.filter((_, index) => index % 2 === 0);
+}
+
+/**
+ * Split template content on top-level `/` (slashes inside `${...}` are not
+ * path separators).
+ * @param {string} text
+ * @returns {string[]}
+ */
+function splitTopLevelSlash(text) {
+  /** @type {string[]} */
+  const parts = [];
+  let start = 0;
+  let depth = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === '$' && text[i + 1] === '{') {
+      depth += 1;
+      i += 1;
+    } else if (text[i] === '}' && depth > 0) {
+      depth -= 1;
+    } else if (text[i] === '/' && depth === 0) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts;
+}
+
+/**
+ * Split call arguments on top-level commas (respecting quotes, template
+ * literals, `${...}` interpolations, and nested parentheses).
+ * @param {string} text
+ * @returns {string[]}
+ */
+function splitTopLevelArgs(text) {
+  /** @type {string[]} */
+  const parts = [];
+  let start = 0;
+  let depth = 0;
+  let quote = null;
+  let inTemplate = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quote) {
+      if (ch === quote && text[i - 1] !== '\\') quote = null;
+      continue;
+    }
+    if (inTemplate) {
+      if (ch === '`') {
+        inTemplate = false;
+      } else if (ch === '$' && text[i + 1] === '{') {
+        let d = 1;
+        i += 2;
+        while (i < text.length && d > 0) {
+          if (text[i] === '{') d += 1;
+          else if (text[i] === '}') d -= 1;
+          i += 1;
+        }
+        continue;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+    } else if (ch === '`') {
+      inTemplate = true;
+    } else if (ch === '(') {
+      depth += 1;
+    } else if (ch === ')') {
+      depth -= 1;
+    } else if (ch === ',' && depth === 0) {
+      parts.push(text.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(text.slice(start));
+  return parts;
 }
 
 /**
@@ -731,24 +911,36 @@ function balancedCallArgs(source, open) {
  * @returns {FirestoreScopeRule | null}
  */
 export function matchScopeRule(scope, queryKey) {
-  /** @type {{ key: string, rule: FirestoreScopeRule } | null} */
-  let best = null;
-  for (const [key, rule] of scope) {
-    if (!key) continue; // fully-wildcard paths never govern a query shape
+  const rules = matchScopeRules(scope, queryKey);
+  return rules.length > 0 ? rules[0] : null;
+}
+
+/**
+ * All rules governing a query path (longest key first).
+ * @param {RulesScope} scope
+ * @param {string} queryKey
+ * @returns {FirestoreScopeRule[]}
+ */
+export function matchScopeRules(scope, queryKey) {
+  /** @type {Array<{ key: string, rule: FirestoreScopeRule }>} */
+  const found = [];
+  for (const [ruleKey, rule] of scope) {
+    if (!ruleKey) continue; // fully-wildcard paths never govern a query shape
     let matches = false;
     if (rule.leadingRecursive) {
       // `match /{path=**}/personnel/{id}` governs paths ABOVE its key too.
-      matches = queryKey === key || queryKey.endsWith(`/${key}`);
+      matches = queryKey === ruleKey || queryKey.endsWith(`/${ruleKey}`);
     } else if (rule.recursive) {
       // `match /tenants/{t}/{d=**}` governs the whole subtree below its key.
-      matches = queryKey === key || queryKey.startsWith(`${key}/`);
+      matches = queryKey === ruleKey || queryKey.startsWith(`${ruleKey}/`);
     } else {
       // A plain match governs ONLY its exact depth - `match /shoots/{shootId}`
       // does not govern `shoots/{shootId}/logs` (subcollections need their own
       // nested match, or a `{...=**}` wildcard).
-      matches = queryKey === key;
+      matches = queryKey === ruleKey;
     }
-    if (matches && (!best || key.length > best.key.length)) best = { key, rule };
+    if (matches) found.push({ key: ruleKey, rule });
   }
-  return best ? best.rule : null;
+  found.sort((a, b) => b.key.length - a.key.length);
+  return found.map((entry) => entry.rule);
 }

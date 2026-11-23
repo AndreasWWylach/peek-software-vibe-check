@@ -261,11 +261,21 @@ Match semantics mirror Firestore: a plain `match /shoots/{shootId}` governs only
 that depth (not `shoots/{id}/logs` subcollections), `{…=**}` rules recurse, and
 a leading `{path=**}` rule suffix-matches deeper paths. Queries in test files
 (`rules-test.mjs`, `*.test.*`, `*-test.*`) are skipped — denied-shape queries
-there are deliberate negative assertions. The cross-check needs the rules and
-the client queries in one repo — when they're split across repos (the shared
-Firebase project layout: reelvenue's client in one repo, the fenced rules in
-setdots), the report says so in the missing-rules message and the
-not-statically-verifiable guidance instead of guessing.
+there are deliberate negative assertions. The same parser powers the **write
+cross-check**: client SDK writes (`setDoc`/`updateDoc`/`deleteDoc`/`addDoc`) are
+matched against the rules' write state — a write to a collection whose rules
+deny client writes (`allow write: if false`, or no write rule at all —
+deny-by-default) is a `write-denied` finding, the static form of "money and
+inventory move only inside Cloud Functions". Server-side Admin SDK files
+(`functions/` workspaces, `firebase-admin` imports) are exempt — they bypass
+rules by design. Path reconstruction is positional: the store-reference
+argument is dropped, dynamic arguments become `*` markers, and even positions
+(doc ids) are normalized away, so `doc(db, 'rvLedger', entryId)` and
+`doc(db, 'rvProfiles', 'p1')` both resolve to the collection key. The
+cross-check needs the rules and the client queries in one repo — when they're
+split across repos (the shared Firebase project layout: reelvenue's client in
+one repo, the fenced rules in setdots), the report says so in the missing-rules
+message and the not-statically-verifiable guidance instead of guessing.
 
 **Storage rules in shared projects** — per-bucket rules files
 (`storage.rules`, `storage.rvmedia.rules`, …) are all recorded and checked

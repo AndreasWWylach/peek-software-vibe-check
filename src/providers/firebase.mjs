@@ -20,7 +20,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { scanRepo } from '../stack.mjs';
 import { isIgnoredDir, isTestFile } from '../ignore.mjs';
-import { parseRulesScope, scanFirestoreQueries, matchScopeRule } from '../firestore/scope.mjs';
+import { parseRulesScope, scanFirestoreQueries, scanFirestoreWrites, matchScopeRule, matchScopeRules } from '../firestore/scope.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').Finding} Finding */
@@ -69,6 +69,11 @@ export const firebaseProvider = {
         // (the rule/query mismatch that shipped as reelvenue's film-assets bug).
         for (const mismatch of crossCheckQueries(ctx, content)) {
           findings.push(ruleQueryMismatchFinding(mismatch));
+        }
+        // Write side: client writes to collections the rules deny are dead code
+        // today and a rules-loosening away from client-writable money/inventory.
+        for (const denied of crossCheckWrites(ctx, content)) {
+          findings.push(writeDeniedFinding(denied));
         }
       }
     }
@@ -307,6 +312,76 @@ function crossCheckQueries(ctx, rulesText) {
     }
   }
   return mismatches;
+}
+
+/**
+ * Cross-check every client-side Firestore WRITE against the rules: a write to
+ * a collection whose rules deny client writes (deny-by-default, `allow write:
+ * if false`) can never succeed - or worse, someone loosened the rules to make
+ * it succeed. Server-side Admin SDK code (functions/) is exempt: it bypasses
+ * rules by design.
+ * @param {import('../types.mjs').RunContext} ctx
+ * @param {string} rulesText
+ * @returns {Array<{ file: string, pathKey: string, line: number }>}
+ */
+function crossCheckWrites(ctx, rulesText) {
+  const scope = parseRulesScope(rulesText);
+  if (scope.size === 0) return [];
+
+  /** @type {Set<string>} */
+  const files = new Set();
+  for (const target of ctx.targets) collectClientFiles(target, ctx.repoRoot, files);
+
+  /** @type {Array<{ file: string, pathKey: string, line: number }>} */
+  const denied = [];
+  for (const abs of files) {
+    const repoFile = relative(ctx.repoRoot, abs).replace(/^[/\\]+/, '');
+    if (isServerFile(repoFile)) continue;
+    const source = readFileSafely(abs);
+    if (!source || /firebase-admin|firebase-functions/.test(source)) continue;
+    for (const write of scanFirestoreWrites(source)) {
+      if (!write.pathKey || write.pathKey.split('/').every((seg) => seg === '*')) continue;
+      const rules = matchScopeRules(scope, write.pathKey);
+      // Deny-by-default: no matching rule also denies the write.
+      if (rules.every((rule) => rule.writesDenied)) {
+        denied.push({ file: repoFile, pathKey: write.pathKey, line: write.line });
+      }
+    }
+  }
+  return denied;
+}
+
+/**
+ * Is a repo-relative file server-side (a Cloud Functions workspace)?
+ * @param {string} repoFile
+ * @returns {boolean}
+ */
+function isServerFile(repoFile) {
+  return repoFile.split(/[/\\]/).includes('functions');
+}
+
+/**
+ * "Client writes to a rules-denied collection" finding.
+ * @param {{ file: string, pathKey: string, line: number }} denied
+ * @returns {Finding}
+ */
+function writeDeniedFinding(denied) {
+  const { file, pathKey, line } = denied;
+  return {
+    id: `firebase:write-denied:${file}:${pathKey}`,
+    kind: 'teardown',
+    file,
+    line,
+    column: null,
+    severity: 'high',
+    pillar: 'security',
+    teardownId: TEARDOWN_ID,
+    title: `Client writes to \`${pathKey}\`, which the rules deny`,
+    message: `This client-side write targets \`${pathKey}\`, but \`firestore.rules\` denies client writes there (\`allow write: if false\` or no write rule). Denied writes fail at runtime - and if the rules were ever loosened to make this work, the client would be writing data the design reserves for Cloud Functions (money and inventory must move only inside authenticated function transactions).`,
+    fixSummary: 'Move the write into an authenticated Cloud Function (Admin SDK), or add a scoped `allow write` rule and constrain the client by it.',
+    source: { provider: 'firebase', ruleId: 'write-denied' },
+    dependency: null,
+  };
 }
 
 /**
