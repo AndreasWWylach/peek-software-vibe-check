@@ -438,3 +438,76 @@ test('firebase provider flags client writes to rules-denied collections', async 
   assert.equal(denied[0]?.teardownId, 'TD-008');
   assert.ok(String(denied[0]?.message).includes('rvLedger'));
 });
+
+test('firebase provider flags cross-family get() reads in a fenced rules file', async () => {
+  const findings = await runFixture((root) => {
+    writeFileSync(
+      join(root, 'firestore.rules'),
+      "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n" +
+        "    function signedIn() { return request.auth != null; }\n" +
+        "    function titleData(tid) { return get(/databases/$(database)/documents/wsTitles/$(tid)).data; }\n" +
+        "    match /projects/{projectId} {\n      allow read: if signedIn();\n    }\n" +
+        "    match /rvVenues/{venueId} {\n      allow read: if signedIn() && titleData(titleId).get('status', '') == 'ok';\n    }\n" +
+        "    match /rvFilms/{filmId} {\n      allow read: if signedIn();\n    }\n" +
+        "    match /wsTitles/{titleId} {\n      allow read: if signedIn();\n    }\n" +
+        "    match /wsScreeners/{token} {\n      allow read: if signedIn();\n    }\n" +
+        "  }\n}\n",
+    );
+  });
+  const crosses = findings.filter((finding) => finding.source.ruleId === 'cross-family-get');
+  assert.equal(crosses.length, 1, 'only the rvVenues block reads across families');
+  assert.equal(crosses[0]?.advisory, true);
+  assert.ok(String(crosses[0]?.message).includes('wsTitles'));
+});
+
+test('firebase provider stays silent on shared-layer reads (prefix family -> base)', async () => {
+  const findings = await runFixture((root) => {
+    writeFileSync(
+      join(root, 'firestore.rules'),
+      "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n" +
+        "    function signedIn() { return request.auth != null; }\n" +
+        "    function userData(u) { return get(/databases/$(database)/documents/users/$(u)).data; }\n" +
+        "    match /screeners/{token} {\n      allow read: if signedIn() && userData(u).get('id', '') == 'x';\n    }\n" +
+        "    match /screenCredits/{creditId} {\n      allow read: if signedIn();\n    }\n" +
+        "    match /projects/{projectId} {\n      allow read: if signedIn();\n    }\n" +
+        "  }\n}\n",
+    );
+  });
+  const crosses = findings.filter((finding) => finding.source.ruleId === 'cross-family-get');
+  assert.equal(crosses.length, 0, 'the base layer is the shared account graph');
+});
+
+test('firebase provider stays silent on same-family get() reads', async () => {
+  const findings = await runFixture((root) => {
+    writeFileSync(
+      join(root, 'firestore.rules'),
+      "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n" +
+        "    function signedIn() { return request.auth != null; }\n" +
+        "    function profileData(uid) { return get(/databases/$(database)/documents/rvProfiles/$(uid)).data; }\n" +
+        "    match /rvVenues/{venueId} {\n      allow read: if signedIn() && profileData(uid).get('tier', '') == 'pro';\n    }\n" +
+        "    match /rvFilms/{filmId} {\n      allow read: if signedIn();\n    }\n" +
+        "    match /projects/{projectId} {\n      allow read: if signedIn();\n    }\n" +
+        "    match /wsTitles/{titleId} {\n      allow read: if signedIn();\n    }\n" +
+        "    match /wsScreeners/{token} {\n      allow read: if signedIn();\n    }\n" +
+        "  }\n}\n",
+    );
+  });
+  const crosses = findings.filter((finding) => finding.source.ruleId === 'cross-family-get');
+  assert.equal(crosses.length, 0, 'rvVenues -> rvProfiles is the same family');
+});
+
+test('findCrossFamilyGets is silent when there are no prefix families', async () => {
+  const findings = await runFixture((root) => {
+    writeFileSync(
+      join(root, 'firestore.rules'),
+      "rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n" +
+        "    function signedIn() { return request.auth != null; }\n" +
+        "    function userData(u) { return get(/databases/$(database)/documents/users/$(u)).data; }\n" +
+        "    match /orders/{orderId} {\n      allow read: if signedIn() && userData(u).get('id', '') == 'x';\n    }\n" +
+        "    match /products/{productId} {\n      allow read: if signedIn();\n    }\n" +
+        "  }\n}\n",
+    );
+  });
+  const crosses = findings.filter((finding) => finding.source.ruleId === 'cross-family-get');
+  assert.equal(crosses.length, 0, 'orders -> users is a normal cross-collection read');
+});

@@ -20,7 +20,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { scanRepo } from '../stack.mjs';
 import { isIgnoredDir, isTestFile } from '../ignore.mjs';
-import { parseRulesScope, scanFirestoreQueries, scanFirestoreWrites, matchScopeRule, matchScopeRules } from '../firestore/scope.mjs';
+import { parseRulesScope, scanFirestoreQueries, scanFirestoreWrites, matchScopeRule, matchScopeRules, findCrossFamilyGets } from '../firestore/scope.mjs';
 
 /** @typedef {import('../types.mjs').Provider} Provider */
 /** @typedef {import('../types.mjs').Finding} Finding */
@@ -74,6 +74,12 @@ export const firebaseProvider = {
         // today and a rules-loosening away from client-writable money/inventory.
         for (const denied of crossCheckWrites(ctx, content)) {
           findings.push(writeDeniedFinding(denied));
+        }
+        // Fence side: in a multi-product rules file, a block that reads another
+        // product's collections is an advisory (the static half of the
+        // cross-product negative tests the owning repo's harness enforces).
+        for (const fence of findCrossFamilyGets(content)) {
+          findings.push(crossFamilyFinding(fence));
         }
       }
     }
@@ -381,6 +387,32 @@ function writeDeniedFinding(denied) {
     fixSummary: 'Move the write into an authenticated Cloud Function (Admin SDK), or add a scoped `allow write` rule and constrain the client by it.',
     source: { provider: 'firebase', ruleId: 'write-denied' },
     dependency: null,
+  };
+}
+
+/**
+ * "Rule reads another product's collections" advisory (cross-product fence).
+ * @param {{ blockPath: string, foreign: string[] }} fence
+ * @returns {Finding}
+ */
+function crossFamilyFinding(fence) {
+  const { blockPath, foreign } = fence;
+  const shortPath = blockPath.replace(/^\/databases\/\{[^}]+\}\/documents\//, '');
+  return {
+    id: `firebase:cross-family-get:${blockPath}`,
+    kind: 'hygiene',
+    file: 'firestore.rules',
+    line: null,
+    column: null,
+    severity: 'medium',
+    pillar: 'security',
+    teardownId: null,
+    title: `Rule on \`${shortPath}\` reads another product's collections`,
+    message: `This match block reaches \`${foreign.join('`, `')}\`, which belong to a different collection family - in a multi-product rules file, fenced sections must not read across products (or grant access that crosses them).`,
+    fixSummary: 'Route the cross-product read through a shared helper the owning product exposes, or confirm the fence boundary is intentional.',
+    source: { provider: 'firebase', ruleId: 'cross-family-get' },
+    dependency: null,
+    advisory: true,
   };
 }
 

@@ -916,6 +916,86 @@ export function matchScopeRule(scope, queryKey) {
 }
 
 /**
+ * Cross-product fence check (advisory): in a multi-product rules file, top-level
+ * collections that share a 2+ character prefix form a product family (`rvFilms`,
+ * `rvLedger`, ... -> family `rv`); everything unprefixed is the SHARED layer
+ * (the common account graph a suite of products reads legitimately). A match
+ * block of one prefix family that reads (`get(...)`) a collection of a
+ * DIFFERENT prefix family is reported - the static form of "no rule of theirs
+ * may grant access to rv*". Shared-layer reads (either direction) stay silent.
+ * @param {string} rulesText
+ * @returns {Array<{ blockPath: string, foreign: string[] }>}
+ */
+export function findCrossFamilyGets(rulesText) {
+  const { matches, helpers } = parseRuleBlocks(rulesText);
+
+  // Top-level literal collection names (first segment after documents).
+  /** @type {Set<string>} */
+  const topCollections = new Set();
+  for (const block of matches) {
+    const first = segmentsAfterDocuments(block.path)[0] ?? '';
+    if (first && !first.startsWith('{')) topCollections.add(first);
+  }
+  if (topCollections.size < 3) return []; // not a multi-collection rules file
+
+  // Prefix families: a prefix of >=2 chars shared by >=2 collection names.
+  const names = [...topCollections];
+  /** @type {Map<string, string>} */
+  const familyOf = new Map();
+  /** @type {string[]} */
+  const prefixes = [];
+  for (let len = 2; len <= 8; len += 1) {
+    /** @type {Map<string, number>} */
+    const seen = new Map();
+    for (const name of names) {
+      if (name.length < len) continue;
+      const prefix = name.slice(0, len);
+      seen.set(prefix, (seen.get(prefix) ?? 0) + 1);
+    }
+    for (const [prefix, count] of seen) {
+      if (count >= 2 && !prefixes.some((p) => prefix.startsWith(p))) prefixes.push(prefix);
+    }
+  }
+  if (prefixes.length < 2) return []; // needs TWO fenced families to cross
+
+  for (const name of names) {
+    const prefix = prefixes.find((p) => name.startsWith(p));
+    familyOf.set(name, prefix ?? 'base');
+  }
+
+  /** @type {Map<string, Set<string>>} */
+  const getMemo = new Map();
+
+  /** @type {Array<{ blockPath: string, foreign: string[] }>} */
+  const findings = [];
+  for (const block of matches) {
+    const first = segmentsAfterDocuments(block.path)[0] ?? '';
+    if (!first || first.startsWith('{')) continue; // wildcard-first blocks skip
+    const blockFamily = familyOf.get(first);
+    if (blockFamily === undefined || blockFamily === 'base') continue;
+    // The collections this block reaches: inline get() paths + helpers it calls.
+    const inline = [...(block.readLines.join('\n') + '\n' + block.writeLines.join('\n')).matchAll(/get\(\s*\/databases\/[^)]*?\/documents\/([A-Za-z0-9_-]+)\//g)]
+      .map((m) => m[1]);
+    const reached = new Set(inline);
+    for (const line of [...block.readLines, ...block.writeLines]) {
+      for (const name of calledHelpers(line, helpers)) {
+        const collections = helperCollections(name, helpers, getMemo);
+        if (!collections) continue;
+        for (const c of collections) reached.add(c);
+      }
+    }
+    // Only a DIFFERENT prefix family is suspicious; the shared base layer is
+    // legitimate to read from anywhere (one account graph across the suite).
+    const foreign = [...reached].filter((c) => {
+      const fam = familyOf.get(c);
+      return fam !== undefined && fam !== 'base' && fam !== blockFamily;
+    });
+    if (foreign.length > 0) findings.push({ blockPath: block.path, foreign });
+  }
+  return findings;
+}
+
+/**
  * All rules governing a query path (longest key first).
  * @param {RulesScope} scope
  * @param {string} queryKey
