@@ -30,3 +30,11 @@
 - ESM (`.mjs`), Node ≥ 22, zero runtime dependencies where possible (the orchestrator shells out to external binaries).
 - Every custom Semgrep rule must ship with a golden test: its TD's `vulnerableCode` fires, `hardenedCode` stays silent.
 - Rules are organized per `(TD × language)` — see the design doc §7.
+
+## Branching & releases
+
+- Trunk-based: `main` is always releasable. One short-lived branch per TD or per stack, merged via PR when CI is green (`npm run typecheck` + `npm test`).
+- Semver from `package.json`: patch = fixes / FP reduction (`0.1.1`); minor = new teardown rules or new stack support (`0.2.0`).
+- A release is a tag `vX.Y.Z` + GitHub release. Published tags never move.
+- New TD: peek-software catalog entry → sync facts into `catalog/teardowns.json` → `rules/peek/<TD>/` + golden fixtures → config gating if needed → validation scans on dev apps.
+- New stack: `src/stack.mjs` markers + manifest detection → onboarding `TOOLS` entry → CI install step → docs (README/SETUP) → tests.

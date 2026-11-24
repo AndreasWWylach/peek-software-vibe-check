@@ -267,6 +267,11 @@ The scanner is open (Apache-2.0) precisely so it can be sharpened in the open �
 
 Start from an issue or open a small, focused PR. `npm test` (and `npm run typecheck`) is the bar; the design lives in the internal design doc (`docs/`, not published), and `AGENTS.md` is the quick start.
 
+**Branching & releases:** trunk-based — one short-lived branch per teardown or
+stack, merged when CI is green. Semver: patch for fixes (`0.1.1`), minor for new
+rules or stacks (`0.2.0`); a release is a tag + GitHub release, and published
+tags never move.
+
 ## License
 
 Apache-2.0 — see `LICENSE`.
