@@ -50,7 +50,7 @@ Options:
   --dry-run          Print every planned install step without running anything.
   --yes              Accept all install steps without prompting.
   --all              Consider every tool, even those the detected stack does not need.
-  --skip <tool>      Skip a tool by id (repeatable): node semgrep osv-scanner madge scc gitleaks eslint.
+  --skip <tool>      Skip a tool by id (repeatable): node semgrep osv-scanner madge scc gitleaks eslint checkov hadolint trivy bandit gosec phpstan.
   --no-color         Plain output (no ANSI colors).
   -v, --version      Print the engine version.
   -h, --help         Print this help.`;

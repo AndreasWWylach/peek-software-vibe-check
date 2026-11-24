@@ -14,7 +14,7 @@
 set -euo pipefail
 
 ENGINE_REPO="https://github.com/AndreasWWylach/peek-software-vibe-check.git"
-ENGINE_TAG="${ENGINE_TAG:-main}"          # override with a pinned tag/release
+ENGINE_TAG="${ENGINE_TAG:-v0.1.0}"        # override with a different tag/release
 INSTALL_DIR="${VIBE_CHECK_HOME:-$HOME/.local/share/vibe-check}"
 BIN_DIR="$HOME/.local/bin"
 
