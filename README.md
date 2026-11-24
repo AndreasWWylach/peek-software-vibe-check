@@ -1,10 +1,10 @@
-# vibe-check
+# peek.software vibe-check
 
 Open-source, local deep-scan engine for [peek.software](https://peek.software). It turns Peek's teardown catalog into an executable audit of your codebase — running **entirely on your machine, against your own source code**.
 
-> **⚠️ Early beta — under active development.** The scanner runs end-to-end and is golden-tested against real apps, but the rule catalog still covers a growing subset of the teardown catalog, and findings & scoring may still change as it is tuned against real codebases. Treat the report as a strong, specific signal to review — not a finished audit.
+> **Release 0.1.0.** The engine runs end-to-end and is golden-tested against real apps — but the rule catalog still covers a growing subset of the teardown catalog, and findings & scoring will keep evolving as it is tuned against real codebases. Treat the report as a strong, specific signal to review — not a finished audit.
 
-> **Status:** Shipped — the engine scans real repos end-to-end with twenty-one providers and fifteen teardown rules (all golden-tested), plus automatic tenant-identity discovery (Prisma schema + SQL migrations), a Firestore rule/query cross-check, and a PostgreSQL/Supabase row-level-security check. The full design doc is internal (not published in this repo); see **[peek.software/scan](https://peek.software/scan)** for more about the scanner.
+> **Status:** 0.1.0 — the engine scans real repos end-to-end with twenty-one providers and sixteen golden-tested teardown rules, plus automatic tenant-identity discovery (Prisma schema + SQL migrations), a helper-aware Firestore rules cross-check (rule/query mismatches, write-denied paths, and cross-product fence reads), and a PostgreSQL/Supabase row-level-security check. The full design doc is internal (not published in this repo); see **[peek.software/scan](https://peek.software/scan)** for more about the scanner.
 
 ## Trust statement
 
@@ -29,7 +29,7 @@ Open-source, local deep-scan engine for [peek.software](https://peek.software). 
 - [gosec](https://github.com/securego/gosec) — Go security SAST (optional, Go repos only)
 - [phpstan](https://phpstan.org) — PHP static analysis, hallucination checks (optional, PHP ≥ 8.1; composer-installed PHP apps)
 
-The **tests**, **dependency-hygiene**, **security-headers**, **CSRF**, **wildcard-CORS**, **CI**, **Firebase** and **PostgreSQL/Supabase RLS** providers are built into the engine — no binary to install. The **Semgrep PHP packs** (core + Laravel/Symfony/Doctrine/WordPress) are vendored into `rules/vendored/php/` (offline, pinned SHA) and selected automatically from `composer.json`. The **PHPStan framework extensions** (phpstan-symfony, phpstan-doctrine) are likewise vendored into `rules/vendored/phpstan/` — Symfony/Pimcore/Doctrine apps need only the `phpstan` PHAR, no Composer. **Laravel** is the one exception: `larastan` is *not* vendored (it boots the app's own Illuminate), so run `composer require --dev larastan/larastan` inside the Laravel app first.
+The **tests**, **dependency-hygiene**, **security-headers**, **CSRF**, **wildcard-CORS**, **CI**, **rate-limiting**, **Firebase** and **PostgreSQL/Supabase RLS** providers are built into the engine — no binary to install. The **Semgrep PHP packs** (core + Laravel/Symfony/Doctrine/WordPress) are vendored into `rules/vendored/php/` (offline, pinned SHA) and selected automatically from `composer.json`. The **PHPStan framework extensions** (phpstan-symfony, phpstan-doctrine) are likewise vendored into `rules/vendored/phpstan/` — Symfony/Pimcore/Doctrine apps need only the `phpstan` PHAR, no Composer. **Laravel** is the one exception: `larastan` is *not* vendored (it boots the app's own Illuminate), so run `composer require --dev larastan/larastan` inside the Laravel app first.
 
 A missing binary is reported as **"skipped"** in the report — never a failure. The engine degrades gracefully.
 
@@ -47,6 +47,9 @@ This writes `AUDIT-REPORT.md` (human), `peek-report.json` (machine) and
 into the current directory. Skip the prompts with `--no-fix-prompts`;
 regenerate them from an existing report with `vibe-check fix-prompts`.
 
+See [what a scan looks like](#what-a-scan-looks-like) for a real example of
+all three outputs.
+
 ### Fix it with AI
 
 Every run also writes **`FIX-PROMPTS.md`**: one copy-paste remediation prompt
@@ -57,7 +60,8 @@ Codex, aider, OpenCode with DeepSeek). Each prompt ends with verification:
 re-run the scan and confirm the finding is gone — the fix is proven by the
 scanner, not claimed by the model. For Claude Code there is a bundled skill
 (`skills/vibe-check/`); `AI-FIX-GUIDE.md` is the harness-neutral version of the
-same workflow.
+same workflow. A real run's prompts are published as
+**[`SAMPLE-FIX-PROMPTS.md`](SAMPLE-FIX-PROMPTS.md)**.
 
 ### Onboarding (installer)
 
@@ -102,6 +106,65 @@ bash setup.sh
 | `vibe-check setup` | Interactive onboarding (installs the tools) |
 | `vibe-check --version` | Print the engine version |
 | `vibe-check --help` | Print help |
+
+## What a scan looks like
+
+One command writes three files — `AUDIT-REPORT.md` (human), `peek-report.json`
+(machine), `FIX-PROMPTS.md` (AI remediation):
+
+![vibe-check scanning a marketplace app](assets/vibe-check-scan.png)
+
+**Colors:** cyan = provider section · yellow = counts & risk score · green =
+files written · dim = skipped/zero counts · red = errors. Each provider prints
+its own count or `skipped`; the run ends with the risk score, the files
+written, and the scan duration.
+
+A real (lightly redacted) scan of a marketplace app under development — the same app the [marketplace-rebuild case study](https://peek.software/case-study/marketplace-rebuild) documents:
+
+> **Verdict** — scores **133/350** — Needs Hardening; the top issue is
+> **Firestore has no security rules** (2 critical). **Go-Live:** 🔴 Please
+> review before going live. **Dependencies:** 18 known CVEs (2 critical).
+
+- **[SAMPLE-REPORT.md](SAMPLE-REPORT.md)** — the full report: verdict, go-live
+  readiness, app stack, agent provenance, pillar breakdown, findings with fix
+  summaries, advisories, CVEs, and the skipped/disabled checks.
+- **[SAMPLE-FIX-PROMPTS.md](SAMPLE-FIX-PROMPTS.md)** — the `FIX-PROMPTS.md`
+  from the same run: 15 copy-paste remediation prompts, one per finding group.
+
+`peek-report.json` is the schema-validated machine output (`schema/`) that the
+peek.software dashboard consumes:
+
+```json
+{ "engine": { "name": "peek.software vibe-check", "version": "0.1.0" },
+  "riskScore": { "total": 133, "max": 350, "tier": "amber", "riskPercentage": 38 } }
+```
+
+### Covered teardowns
+
+Sixteen golden-tested teardown rules (one per `(TD × language)` group under
+`rules/peek/`), each linked to its teardown:
+
+| Rule | Detects |
+| --- | --- |
+| [TD-002](https://peek.software/teardowns/TD-002) | LLM calls without a `max_tokens` cap (unbounded spend) |
+| [TD-008](https://peek.software/teardowns/TD-008) | Tenant-scope violations — IDOR lookups, missing Firestore rules, rule/query mismatches |
+| [TD-016](https://peek.software/teardowns/TD-016) | Hardcoded API keys / secrets |
+| [TD-032](https://peek.software/teardowns/TD-032) | Cloud handlers reachable without authentication |
+| [TD-033](https://peek.software/teardowns/TD-033) | SQL injection via assembled queries |
+| [TD-042](https://peek.software/teardowns/TD-042) | Shell command injection |
+| [TD-045](https://peek.software/teardowns/TD-045) | TypeScript escape hatches (`@ts-ignore`, `any`) |
+| [TD-046](https://peek.software/teardowns/TD-046) | Swallowed exceptions (`except: pass`) |
+| [TD-050](https://peek.software/teardowns/TD-050) | Billing webhooks without signature verification |
+| [TD-051](https://peek.software/teardowns/TD-051) | Client-controlled billing entitlements |
+| [TD-052](https://peek.software/teardowns/TD-052) | Firestore listeners that write back (read/write loops) |
+| [TD-054](https://peek.software/teardowns/TD-054) | Failures silently swallowed into falsy defaults |
+| [TD-055](https://peek.software/teardowns/TD-055) | Signature checks without a presence check |
+| [TD-057](https://peek.software/teardowns/TD-057) | Server-side fetch of request-supplied URLs (SSRF) |
+| [TD-058](https://peek.software/teardowns/TD-058) | Weak, fast, unsalted password hashing |
+| [TD-059](https://peek.software/teardowns/TD-059) | File uploads without validation (`multer` without `fileFilter`) |
+
+Hardening rules that are not teardown-specific (XSS, secrets, HTTP headers, …)
+live under `rules/hygiene/` and run on every scan.
 
 ## Development
 
