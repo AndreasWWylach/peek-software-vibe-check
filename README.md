@@ -1,5 +1,10 @@
 # peek.software vibe-check
 
+[![License](https://img.shields.io/github/license/AndreasWWylach/peek-software-vibe-check)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-green)](https://nodejs.org)
+[![Telemetry](https://img.shields.io/badge/telemetry-zero-blue)](https://github.com/AndreasWWylach/peek-software-vibe-check#trust-statement)
+[![Release](https://img.shields.io/github/v/release/AndreasWWylach/peek-software-vibe-check?sort=semver)](https://github.com/AndreasWWylach/peek-software-vibe-check/releases)
+
 Open-source, local deep-scan engine for [peek.software](https://peek.software). It turns Peek's teardown catalog into an executable audit of your codebase — running **entirely on your machine, against your own source code**.
 
 > **Release 0.1.0.** The engine runs end-to-end and is golden-tested against real apps — but the rule catalog still covers a growing subset of the teardown catalog, and findings & scoring will keep evolving as it is tuned against real codebases. Treat the report as a strong, specific signal to review — not a finished audit.
@@ -35,11 +40,27 @@ A missing binary is reported as **"skipped"** in the report — never a failure.
 
 ## Usage
 
+New to the scanner? The three-step quick start in [SETUP.md](SETUP.md) (or the
+one-line `setup.sh` bootstrapper below) gets you from zero to a first scan.
+
 ```bash
 git clone https://github.com/AndreasWWylach/peek-software-vibe-check.git
 cd peek-software-vibe-check
 npm install
 node bin/vibe-check.mjs run --config /path/to/peek-config.json
+```
+
+`peek-config.json` is the inert, schema-validated input (peek.software generates
+it for you):
+
+```json
+{
+  "version": 1,
+  "engine": ">=0.1.0",
+  "targets": ["src/"],
+  "languages": ["typescript"],
+  "enabledRules": ["TD-016", "TD-045"]
+}
 ```
 
 This writes `AUDIT-REPORT.md` (human), `peek-report.json` (machine) and
@@ -219,8 +240,8 @@ chmod +x ~/.local/bin/phpstan
   its teardown's `vulnerableCode` (must fire) and `hardenedCode` (must stay silent).
 - **Integration test** (`tests/integration.test.mjs`) runs the full engine against
   a checked-in sample app and asserts the report.
-- CI (`.github/workflows/ci.yml`) installs both tools and runs typecheck + tests
-  on every push.
+- CI (`.github/workflows/ci.yml`) installs the twelve provider binaries and runs
+  typecheck + tests on every push.
 
 ## Layout
 

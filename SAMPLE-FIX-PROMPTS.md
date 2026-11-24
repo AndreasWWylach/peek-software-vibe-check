@@ -5,7 +5,8 @@ This is the `FIX-PROMPTS.md` produced by the same scan as
 marketplace app under development — the app of the [marketplace-rebuild case study](https://peek.software/case-study/marketplace-rebuild). It shows the AI-remediation companion every
 scan writes next to the report: one copy-paste prompt per finding group
 (locations → what's wrong → fix → deep-dive link), each ending with
-verification against the re-run scan.
+verification against the re-run scan. Each `## Fix N` section below is
+standalone — copy it into the AI coding agent one section at a time.
 **Date:** 2026-11-23
 **Engine:** peek.software vibe-check 0.1.0 (public, commit a306f62)
 
@@ -21,7 +22,7 @@ bundled Claude Code skill (`skills/vibe-check/`). Fix, verify, move on.
 ## Checklist (15 fixes)
 
 - [ ] 1. TD-008: Firestore has no security rules — CRITICAL
-- [ ] 2. TD-016: Hardcoded API key / secret — CRITICAL
+- [ ] 2. TD-016: Hardcoded API key / secret — CRITICAL (test file, not scored)
 - [ ] 3. stripe-secret-token: Committed secret in config — CRITICAL
 - [ ] 4. Upgrade dependencies with known CVEs — CRITICAL
 - [ ] 5. TD-021: Circular dependency: frontend/src/shared/state/mfa.ts → frontend/src/shared/state/session.ts — HIGH

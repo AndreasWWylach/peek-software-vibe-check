@@ -74,8 +74,6 @@ _How this is scored: each finding adds points by severity — critical 20, high 
 | Software Design & Architecture | 0 | 10 |
 | Testing & Quality Assurance | 0 | 0 |
 
-## Calibration
-
 ## External Dependencies (CVEs)
 | Severity | Package | Version | CVEs | Fix |
 | --- | --- | --- | --- | --- |
